@@ -1,0 +1,6 @@
+# 转义序列测试
+
+legna:
+    output "name:\tLegna\n"
+    output "path: C:\\legna\n"
+    output "say \"hello\"\n"

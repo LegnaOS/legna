@@ -1,0 +1,12 @@
+# Build artifacts
+legnac
+helloworld
+*.o
+
+# Temp files
+/tmp/legna_*
+
+# IDE / OS
+.DS_Store
+.legna/
+.augment-rag/

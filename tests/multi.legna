@@ -1,0 +1,6 @@
+# multiple output test
+
+legna:
+    output "one "
+    output "two "
+    output "three\n"

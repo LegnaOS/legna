@@ -1,0 +1,5 @@
+# 多行输出测试
+
+legna:
+    output "hello\n"
+    output "world\n"
