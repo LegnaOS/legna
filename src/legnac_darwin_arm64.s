@@ -52,25 +52,26 @@ lnk_e:        .asciz "-e"
 lnk_main:     .asciz "_main"
 lnk_arch:     .asciz "-arch"
 lnk_arm64:    .asciz "arm64"
+lnk_dead:     .asciz "-dead_strip"
+lnk_x:        .asciz "-x"
+path_strip:   .asciz "/usr/bin/strip"
 
-// Assembly fragments for codegen
+// Assembly fragments for codegen (batched single-syscall output)
 frag_header:
     .ascii ".global _main\n.align 2\n\n.text\n_main:\n"
     .byte 0
-frag_wr1:     .ascii "    mov x0, #1\n    adrp x1, _s"
-              .byte 0
-frag_wr2:     .ascii "@PAGE\n    add x1, x1, _s"
-              .byte 0
-frag_wr3:     .ascii "@PAGEOFF\n    mov x2, #"
-              .byte 0
-frag_wr4:     .ascii "\n    mov x16, #4\n    svc #0x80\n"
-              .byte 0
-frag_exit:    .ascii "    mov x0, #0\n    mov x16, #1\n    svc #0x80\n\n.data\n"
-              .byte 0
-frag_sd1:     .ascii "_s"
-              .byte 0
-frag_sd2:     .ascii ": .byte "
-              .byte 0
+frag_wr_pre:
+    .ascii "    mov x0, #1\n    adrp x1, _d@PAGE\n    add x1, x1, _d@PAGEOFF\n    mov x2, #"
+    .byte 0
+frag_wr_post:
+    .ascii "\n    mov x16, #4\n    svc #0x80\n"
+    .byte 0
+frag_exit:
+    .ascii "    mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
+    .byte 0
+frag_data:
+    .ascii "\n.data\n_d: .byte "
+    .byte 0
 frag_comma:   .asciz ", "
 frag_nl:      .asciz "\n"
 
@@ -165,7 +166,7 @@ _main:
     cmp x0, #0
     b.ne _err_asm
 
-    // link
+    // link with -dead_strip -x (already strips symbols)
     bl _run_ld
     cmp x0, #0
     b.ne _err_link
@@ -729,7 +730,7 @@ _ps_skip_to_eol:
 
 // ────────────────────────────────────────
 // _gen_asm - Generate ARM64 assembly
-// Uses .byte for string data, processes escape sequences
+// Batched single-syscall output, .byte data
 // ────────────────────────────────────────
 _gen_asm:
     stp x29, x30, [sp, #-16]!
@@ -748,27 +749,27 @@ _gen_asm:
     add x19, x19, str_count@PAGEOFF
     ldr w19, [x19]               // x19 = count
 
-    // Phase 0: compute actual byte lengths for all strings
-    mov x20, #0
+    // compute actual byte lengths + total
+    mov x20, #0                  // index
+    mov x26, #0                  // x26 = total byte length
 _ga_compute_lens:
     cmp w20, w19
-    b.ge _ga_emit_header
+    b.ge _ga_emit_code
     adrp x1, str_ptrs@PAGE
     add x1, x1, str_ptrs@PAGEOFF
-    ldr x21, [x1, x20, lsl #3]  // raw ptr
+    ldr x21, [x1, x20, lsl #3]
     adrp x1, str_lens@PAGE
     add x1, x1, str_lens@PAGEOFF
-    ldr w22, [x1, x20, lsl #2]  // raw len
-    // count actual bytes
-    mov x23, #0                  // src index
-    mov x24, #0                  // byte count
+    ldr w22, [x1, x20, lsl #2]
+    mov x23, #0
+    mov x24, #0
 _ga_cl_loop:
     cmp w23, w22
     b.ge _ga_cl_done
     ldrb w0, [x21, x23]
     cmp w0, #'\\'
     b.ne 1f
-    add x23, x23, #1            // skip escape char
+    add x23, x23, #1
 1:  add x23, x23, #1
     add x24, x24, #1
     b _ga_cl_loop
@@ -776,80 +777,58 @@ _ga_cl_done:
     adrp x1, byte_lens@PAGE
     add x1, x1, byte_lens@PAGEOFF
     str w24, [x1, x20, lsl #2]
+    add x26, x26, x24           // accumulate total
     add x20, x20, #1
     b _ga_compute_lens
 
-_ga_emit_header:
+_ga_emit_code:
+    // emit header
     adrp x0, frag_header@PAGE
     add x0, x0, frag_header@PAGEOFF
     bl _emit_str
 
-    // Phase 1: emit write syscalls
-    mov x20, #0
-_ga_loop:
-    cmp w20, w19
-    b.ge _ga_exit_code
-    adrp x0, frag_wr1@PAGE
-    add x0, x0, frag_wr1@PAGEOFF
+    // emit single batched write (only if total > 0)
+    cbz x26, _ga_emit_exit
+    adrp x0, frag_wr_pre@PAGE
+    add x0, x0, frag_wr_pre@PAGEOFF
     bl _emit_str
-    mov x0, x20
+    mov x0, x26
     bl _emit_num
-    adrp x0, frag_wr2@PAGE
-    add x0, x0, frag_wr2@PAGEOFF
+    adrp x0, frag_wr_post@PAGE
+    add x0, x0, frag_wr_post@PAGEOFF
     bl _emit_str
-    mov x0, x20
-    bl _emit_num
-    adrp x0, frag_wr3@PAGE
-    add x0, x0, frag_wr3@PAGEOFF
-    bl _emit_str
-    // emit actual byte length
-    adrp x1, byte_lens@PAGE
-    add x1, x1, byte_lens@PAGEOFF
-    ldr w0, [x1, x20, lsl #2]
-    bl _emit_num
-    adrp x0, frag_wr4@PAGE
-    add x0, x0, frag_wr4@PAGEOFF
-    bl _emit_str
-    add x20, x20, #1
-    b _ga_loop
 
-_ga_exit_code:
+_ga_emit_exit:
     adrp x0, frag_exit@PAGE
     add x0, x0, frag_exit@PAGEOFF
     bl _emit_str
 
-    // Phase 2: emit .data with .byte directives
-    mov x20, #0
-_ga_data_loop:
-    cmp w20, w19
-    b.ge _ga_done
-    // emit "_sN: .byte "
-    adrp x0, frag_sd1@PAGE
-    add x0, x0, frag_sd1@PAGEOFF
-    bl _emit_str
-    mov x0, x20
-    bl _emit_num
-    adrp x0, frag_sd2@PAGE
-    add x0, x0, frag_sd2@PAGEOFF
+    // emit data section (only if total > 0)
+    cbz x26, _ga_done
+    adrp x0, frag_data@PAGE
+    add x0, x0, frag_data@PAGEOFF
     bl _emit_str
 
-    // emit byte values from string (with escape processing)
+    // emit ALL bytes from ALL strings as one .byte line
+    mov x20, #0                  // string index
+    mov x25, #0                  // first-byte flag
+_ga_str_loop:
+    cmp w20, w19
+    b.ge _ga_data_end
     adrp x1, str_ptrs@PAGE
     add x1, x1, str_ptrs@PAGEOFF
     ldr x21, [x1, x20, lsl #3]
     adrp x1, str_lens@PAGE
     add x1, x1, str_lens@PAGEOFF
     ldr w22, [x1, x20, lsl #2]
-    mov x23, #0                  // src index
-    mov x25, #0                  // first byte flag
+    mov x23, #0
 _ga_byte_loop:
     cmp w23, w22
-    b.ge _ga_byte_end
-    // emit comma separator (not before first byte)
-    cbnz x25, _ga_need_comma
+    b.ge _ga_next_str
+    cbnz x25, _ga_comma
     mov x25, #1
     b _ga_no_comma
-_ga_need_comma:
+_ga_comma:
     adrp x0, frag_comma@PAGE
     add x0, x0, frag_comma@PAGEOFF
     bl _emit_str
@@ -857,42 +836,39 @@ _ga_no_comma:
     ldrb w0, [x21, x23]
     cmp w0, #'\\'
     b.ne _ga_byte_normal
-    // escape sequence
     add x23, x23, #1
     ldrb w0, [x21, x23]
     cmp w0, #'n'
     b.ne 1f
-    mov x0, #10                  // \n = 0x0A
-    b _ga_byte_emit_val
+    mov x0, #10
+    b _ga_byte_val
 1:  cmp w0, #'t'
     b.ne 2f
-    mov x0, #9                   // \t = 0x09
-    b _ga_byte_emit_val
+    mov x0, #9
+    b _ga_byte_val
 2:  cmp w0, #'\\'
     b.ne 3f
-    mov x0, #92                  // \\ = 0x5C
-    b _ga_byte_emit_val
+    mov x0, #92
+    b _ga_byte_val
 3:  cmp w0, #'"'
     b.ne 4f
-    mov x0, #34                  // \" = 0x22
-    b _ga_byte_emit_val
-4:  // unknown escape, emit as-is
-    and x0, x0, #0xFF
-    b _ga_byte_emit_val
+    mov x0, #34
+    b _ga_byte_val
+4:  and x0, x0, #0xFF
+    b _ga_byte_val
 _ga_byte_normal:
     and x0, x0, #0xFF
-_ga_byte_emit_val:
+_ga_byte_val:
     bl _emit_num
     add x23, x23, #1
     b _ga_byte_loop
-_ga_byte_end:
-    // emit newline
+_ga_next_str:
+    add x20, x20, #1
+    b _ga_str_loop
+_ga_data_end:
     adrp x0, frag_nl@PAGE
     add x0, x0, frag_nl@PAGEOFF
     bl _emit_str
-
-    add x20, x20, #1
-    b _ga_data_loop
 
 _ga_done:
     ldp x25, x26, [sp], #16
@@ -976,7 +952,7 @@ _run_ld:
     stp x19, x20, [sp, #-16]!
     sub sp, sp, #112             // argv[13] on stack
 
-    // build argv: ld -o <out> tmp_path_o -lSystem -syslibroot <sdk> -e _main -arch arm64 NULL
+    // build argv: ld -o <out> tmp_path_o -lSystem -syslibroot <sdk> -e _main -arch arm64 -dead_strip -x NULL
     adrp x0, path_ld@PAGE
     add x0, x0, path_ld@PAGEOFF
     str x0, [sp]                 // [0] ld
@@ -1010,7 +986,13 @@ _run_ld:
     adrp x0, lnk_arm64@PAGE
     add x0, x0, lnk_arm64@PAGEOFF
     str x0, [sp, #80]           // [10] arm64
-    str xzr, [sp, #88]          // [11] NULL
+    adrp x0, lnk_dead@PAGE
+    add x0, x0, lnk_dead@PAGEOFF
+    str x0, [sp, #88]           // [11] -dead_strip
+    adrp x0, lnk_x@PAGE
+    add x0, x0, lnk_x@PAGEOFF
+    str x0, [sp, #96]           // [12] -x
+    str xzr, [sp, #104]         // [13] NULL
 
     // fork (macOS: x1=0 parent, x1=1 child)
     mov x16, #SYS_FORK
@@ -1041,6 +1023,51 @@ _run_ld:
 _rl_child:
     adrp x0, path_ld@PAGE
     add x0, x0, path_ld@PAGEOFF
+    mov x1, sp
+    mov x2, #0
+    mov x16, #SYS_EXECVE
+    svc #0x80
+    mov x0, #127
+    mov x16, #SYS_EXIT
+    svc #0x80
+
+// ────────────────────────────────────────
+// _run_strip - Strip symbols from output binary
+// ────────────────────────────────────────
+_run_strip:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    sub sp, sp, #32
+
+    adrp x0, path_strip@PAGE
+    add x0, x0, path_strip@PAGEOFF
+    str x0, [sp]                 // argv[0] = strip
+    adrp x0, out_name@PAGE
+    add x0, x0, out_name@PAGEOFF
+    str x0, [sp, #8]            // argv[1] = output binary
+    str xzr, [sp, #16]          // argv[2] = NULL
+
+    mov x16, #SYS_FORK
+    svc #0x80
+    cbnz x1, _rs_child
+
+    mov x19, x0
+    mov x0, x19
+    adrp x1, wait_stat@PAGE
+    add x1, x1, wait_stat@PAGEOFF
+    mov x2, #0
+    mov x3, #0
+    mov x16, #SYS_WAIT4
+    svc #0x80
+
+    add sp, sp, #32
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+_rs_child:
+    adrp x0, path_strip@PAGE
+    add x0, x0, path_strip@PAGEOFF
     mov x1, sp
     mov x2, #0
     mov x16, #SYS_EXECVE
