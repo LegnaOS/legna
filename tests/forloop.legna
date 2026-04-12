@@ -1,0 +1,7 @@
+# for 循环测试
+
+legna:
+    for i in 0..5:
+        output i
+        output " "
+    output "\n"

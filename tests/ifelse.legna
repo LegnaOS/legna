@@ -1,0 +1,8 @@
+# if/else 测试
+
+legna:
+    let x = 10
+    if x > 5:
+        output "big\n"
+    else:
+        output "small\n"

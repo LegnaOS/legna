@@ -1,0 +1,17 @@
+# FizzBuzz - Legna v0.2 终极测试
+
+legna:
+    for i in 1..101:
+        let m3 = i % 3
+        let m5 = i % 5
+        if m3 == 0:
+            if m5 == 0:
+                output "FizzBuzz\n"
+            else:
+                output "Fizz\n"
+        else:
+            if m5 == 0:
+                output "Buzz\n"
+            else:
+                output i
+                output "\n"

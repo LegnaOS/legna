@@ -1,19 +1,29 @@
 # Legna Compiler - Makefile
 # Platform: macOS ARM64
+# Modular build: src/macos_arm64/*.s
 
 SDK_PATH := $(shell xcrun --show-sdk-path 2>/dev/null || echo "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")
+SRC_DIR  := src/macos_arm64
+BUILD    := build
+
+SRCS := $(wildcard $(SRC_DIR)/*.s)
+OBJS := $(patsubst $(SRC_DIR)/%.s,$(BUILD)/%.o,$(SRCS))
 
 .PHONY: all clean test
 
 all: legnac
 
-legnac: src/legnac_darwin_arm64.s
-	as -o /tmp/legnac.o src/legnac_darwin_arm64.s
-	ld -o legnac /tmp/legnac.o -lSystem -syslibroot $(SDK_PATH) -e _main -arch arm64
-	rm -f /tmp/legnac.o
+$(BUILD):
+	mkdir -p $(BUILD)
+
+$(BUILD)/%.o: $(SRC_DIR)/%.s $(SRC_DIR)/defs.inc | $(BUILD)
+	as -o $@ $<
+
+legnac: $(OBJS)
+	ld -o legnac $(OBJS) -lSystem -syslibroot $(SDK_PATH) -e _main -arch arm64 -dead_strip -x
 
 test: legnac
 	./tests/run_tests.sh
 
 clean:
-	rm -f legnac helloworld /tmp/legna_*
+	rm -rf $(BUILD) legnac helloworld /tmp/legna_*

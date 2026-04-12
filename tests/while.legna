@@ -1,0 +1,9 @@
+# while 循环测试
+
+legna:
+    let x = 5
+    while x > 0:
+        output x
+        output " "
+        x = x - 1
+    output "\n"

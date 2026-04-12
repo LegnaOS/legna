@@ -1,0 +1,10 @@
+# v0.2 变量和算术测试
+
+legna:
+    let x = 42
+    let y = x + 8
+    output y
+    output "\n"
+    x = x - 2
+    output x
+    output "\n"
