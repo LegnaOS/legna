@@ -1,0 +1,8 @@
+legna:
+    let x = 5
+    if x > 10:
+        output "big"
+    elif x > 3:
+        output "mid"
+    else:
+        output "small"

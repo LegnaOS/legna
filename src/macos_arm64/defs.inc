@@ -61,6 +61,15 @@
 .equ TOK_ASSIGN,    30
 .equ TOK_DOTDOT,    31
 .equ TOK_MOD,       32
+.equ TOK_KW_ELIF,   33
+.equ TOK_KW_BREAK,  34
+.equ TOK_KW_CONT,   35
+.equ TOK_KW_AND,    36
+.equ TOK_KW_OR,     37
+.equ TOK_KW_NOT,    38
+.equ TOK_KW_FN,     39
+.equ TOK_KW_RETURN, 40
+.equ TOK_COMMA,     41
 
 // Symbol types
 .equ TY_INT,        0

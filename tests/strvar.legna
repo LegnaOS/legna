@@ -1,0 +1,3 @@
+legna:
+    let a = "hello"
+    output a

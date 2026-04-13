@@ -54,15 +54,22 @@ _lex_loop:
     cbz x25, _lex_mid_line
 
     mov x25, #0
-    // count leading spaces
+    // count leading spaces and tabs
     mov x26, #0
 _lex_count_sp:
     cmp x20, x21
     b.ge _lex_indent_done
     ldrb w0, [x19, x20]
     cmp w0, #' '
-    b.ne _lex_indent_done
+    b.ne _lex_check_tab
     add x26, x26, #1
+    add x20, x20, #1
+    b _lex_count_sp
+_lex_check_tab:
+    cmp w0, #0x09              // tab
+    b.ne _lex_indent_done
+    add x26, x26, #4
+    and x26, x26, #~3         // align to next tab stop (multiple of 4)
     add x20, x20, #1
     b _lex_count_sp
 
@@ -160,9 +167,12 @@ _lex_mid_line:
 
     ldrb w0, [x19, x20]
 
-    // skip mid-line spaces
+    // skip mid-line spaces and tabs
     cmp w0, #' '
+    b.eq _lex_skip_ws
+    cmp w0, #0x09
     b.ne 1f
+_lex_skip_ws:
     add x20, x20, #1
     b _lex_mid_line
 1:
@@ -226,8 +236,19 @@ _op_lparen:
 
 _op_rparen:
     cmp w0, #')'
-    b.ne _op_plus
+    b.ne _op_comma
     mov w0, #TOK_RPAREN
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+
+_op_comma:
+    cmp w0, #','
+    b.ne _op_plus
+    mov w0, #TOK_COMMA
     mov x1, #1
     add x2, x19, x20
     mov x3, #0
@@ -668,13 +689,101 @@ _mk_try_innum:
 _mk_try_instr:
     // "input_str" (9)
     cmp x20, #9
-    b.ne _mk_ident
+    b.ne _mk_try_continue
     mov x0, x19
     adrp x1, _kw_input_str@PAGE
     add x1, x1, _kw_input_str@PAGEOFF
     mov x2, #9
     bl _strncmp
     cbz x0, _mk_instr
+
+_mk_try_continue:
+    // "continue" (8)
+    cmp x20, #8
+    b.ne _mk_try_break
+    mov x0, x19
+    adrp x1, _kw_continue@PAGE
+    add x1, x1, _kw_continue@PAGEOFF
+    mov x2, #8
+    bl _strncmp
+    cbz x0, _mk_continue
+
+_mk_try_break:
+    // "break" (5)
+    cmp x20, #5
+    b.ne _mk_try_elif
+    mov x0, x19
+    adrp x1, _kw_break@PAGE
+    add x1, x1, _kw_break@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_break
+
+_mk_try_elif:
+    // "elif" (4)
+    cmp x20, #4
+    b.ne _mk_try_and
+    mov x0, x19
+    adrp x1, _kw_elif@PAGE
+    add x1, x1, _kw_elif@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_elif
+
+_mk_try_and:
+    // "and" (3)
+    cmp x20, #3
+    b.ne _mk_try_or
+    mov x0, x19
+    adrp x1, _kw_and@PAGE
+    add x1, x1, _kw_and@PAGEOFF
+    mov x2, #3
+    bl _strncmp
+    cbz x0, _mk_and
+
+_mk_try_or:
+    // "or" (2)
+    cmp x20, #2
+    b.ne _mk_try_not
+    mov x0, x19
+    adrp x1, _kw_or@PAGE
+    add x1, x1, _kw_or@PAGEOFF
+    mov x2, #2
+    bl _strncmp
+    cbz x0, _mk_or
+
+_mk_try_not:
+    // "not" (3)
+    cmp x20, #3
+    b.ne _mk_try_fn
+    mov x0, x19
+    adrp x1, _kw_not@PAGE
+    add x1, x1, _kw_not@PAGEOFF
+    mov x2, #3
+    bl _strncmp
+    cbz x0, _mk_not
+
+_mk_try_fn:
+    // "fn" (2)
+    cmp x20, #2
+    b.ne _mk_try_return
+    mov x0, x19
+    adrp x1, _kw_fn@PAGE
+    add x1, x1, _kw_fn@PAGEOFF
+    mov x2, #2
+    bl _strncmp
+    cbz x0, _mk_fn
+
+_mk_try_return:
+    // "return" (6)
+    cmp x20, #6
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_return@PAGE
+    add x1, x1, _kw_return@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_return
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -708,6 +817,30 @@ _mk_innum:
     b _mk_ret
 _mk_instr:
     mov w0, #TOK_KW_INSTR
+    b _mk_ret
+_mk_elif:
+    mov w0, #TOK_KW_ELIF
+    b _mk_ret
+_mk_break:
+    mov w0, #TOK_KW_BREAK
+    b _mk_ret
+_mk_continue:
+    mov w0, #TOK_KW_CONT
+    b _mk_ret
+_mk_and:
+    mov w0, #TOK_KW_AND
+    b _mk_ret
+_mk_or:
+    mov w0, #TOK_KW_OR
+    b _mk_ret
+_mk_not:
+    mov w0, #TOK_KW_NOT
+    b _mk_ret
+_mk_fn:
+    mov w0, #TOK_KW_FN
+    b _mk_ret
+_mk_return:
+    mov w0, #TOK_KW_RETURN
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

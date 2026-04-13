@@ -1,0 +1,5 @@
+legna:
+    let n = 3
+    for i in 0..n:
+        output i
+        output " "

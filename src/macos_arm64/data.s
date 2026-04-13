@@ -22,18 +22,28 @@ _err_link:     .asciz "error: linker failed\n"
 _err_nl:       .asciz "\n"
 _msg_ok:       .asciz "compiled successfully\n"
 
-.globl _kw_legna, _kw_output, _kw_let, _kw_if, _kw_else
+.globl _kw_legna, _kw_output, _kw_let, _kw_if, _kw_else, _kw_elif
 .globl _kw_while, _kw_for, _kw_in, _kw_input_num, _kw_input_str
+.globl _kw_break, _kw_continue, _kw_and, _kw_or, _kw_not
+.globl _kw_fn, _kw_return
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
 _kw_if:        .asciz "if"
 _kw_else:      .asciz "else"
+_kw_elif:      .asciz "elif"
 _kw_while:     .asciz "while"
 _kw_for:       .asciz "for"
 _kw_in:        .asciz "in"
 _kw_input_num: .asciz "input_num"
 _kw_input_str: .asciz "input_str"
+_kw_break:     .asciz "break"
+_kw_continue:  .asciz "continue"
+_kw_and:       .asciz "and"
+_kw_or:        .asciz "or"
+_kw_not:       .asciz "not"
+_kw_fn:        .asciz "fn"
+_kw_return:    .asciz "return"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -56,7 +66,7 @@ _lnk_x:        .asciz "-x"
 
 // ── Codegen fragments ──
 .globl _fg_hdr, _fg_text, _fg_data, _fg_bss, _fg_nl, _fg_comma
-.globl _fg_main, _fg_main2, _fg_exit
+.globl _fg_main, _fg_main2, _fg_frame_ph, _fg_exit
 .globl _fg_ldr, _fg_ldr1, _fg_str_x0, _fg_cb, _fg_mov, _fg_movn
 .globl _fg_push, _fg_pop1, _fg_add, _fg_sub, _fg_mul, _fg_sdiv, _fg_mod
 .globl _fg_cmp0, _fg_cmp1
@@ -66,18 +76,22 @@ _lnk_x:        .asciz "-x"
 .globl _fg_page, _fg_poff, _fg_sd, _fg_sd_byte
 .globl _fg_itoa_call, _fg_str_out
 .globl _fg_input_call, _fg_atoi_call, _fg_inbuf_ptr, _fg_add1
+.globl _fg_adrp_x0, _fg_add_x0
+.globl _fg_add_imm, _fg_sub_imm, _fg_cmp_imm
+.globl _fg_fn_pro, _fg_fn_epi, _fg_bl_uf, _fg_fn_ret
 
 _fg_hdr:       .ascii ".global _main\n.align 2\n\n"
                .byte 0
 _fg_text:      .asciz ".text\n"
 _fg_data:      .asciz "\n.data\n"
-_fg_bss:       .asciz "\n.bss\n.align 4\n_input_buf: .space 1024\n_itoa_buf: .space 24\n"
+_fg_bss:       .asciz "\n.bss\n.align 4\n_input_buf: .space 1024\n_itoa_buf: .space 24\n_ob_buf: .space 4096\n_ob_pos: .space 8\n"
 _fg_nl:        .asciz "\n"
 _fg_comma:     .asciz ", "
 _fg_main:      .ascii "_main:\n    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n    sub sp, sp, #"
                .byte 0
 _fg_main2:     .asciz "\n"
-_fg_exit:      .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
+_fg_frame_ph:  .asciz "0000"
+_fg_exit:      .ascii "    bl _rt_flush\n    mov sp, x29\n    ldp x29, x30, [sp], #16\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
                .byte 0
 _fg_ldr:       .asciz "    ldr x0, [x29, #-"
 _fg_ldr1:      .asciz "    ldr x1, [x29, #-"
@@ -108,16 +122,14 @@ _fg_wr_fd:     .asciz "    mov x0, #1\n"
 _fg_wr_adrp:   .asciz "    adrp x1, "
 _fg_wr_add:    .asciz "    add x1, x1, "
 _fg_wr_len:    .asciz "    mov x2, #"
-_fg_wr_sys:    .ascii "    mov x16, #4\n    svc #0x80\n"
-               .byte 0
+_fg_wr_sys:    .asciz "    bl _rt_buf_write\n"
 _fg_page:      .asciz "@PAGE\n"
 _fg_poff:      .asciz "@PAGEOFF\n"
 _fg_sd:        .asciz "_s"
 _fg_sd_byte:   .asciz ": .byte "
-_fg_itoa_call: .ascii "    adrp x1, _itoa_buf@PAGE\n    add x1, x1, _itoa_buf@PAGEOFF\n    bl _rt_itoa\n    mov x2, x0\n    mov x0, #1\n    adrp x1, _itoa_buf@PAGE\n    add x1, x1, _itoa_buf@PAGEOFF\n    mov x16, #4\n    svc #0x80\n"
+_fg_itoa_call: .ascii "    adrp x1, _itoa_buf@PAGE\n    add x1, x1, _itoa_buf@PAGEOFF\n    bl _rt_itoa\n    mov x2, x0\n    adrp x1, _itoa_buf@PAGE\n    add x1, x1, _itoa_buf@PAGEOFF\n    bl _rt_buf_write\n"
                .byte 0
-_fg_str_out:   .ascii "    mov x0, #1\n    mov x16, #4\n    svc #0x80\n"
-               .byte 0
+_fg_str_out:   .asciz "    bl _rt_buf_write\n"
 _fg_input_call: .ascii "    bl _rt_read_line\n"
                 .byte 0
 _fg_atoi_call:  .ascii "    adrp x0, _input_buf@PAGE\n    add x0, x0, _input_buf@PAGEOFF\n    bl _rt_atoi\n"
@@ -125,6 +137,18 @@ _fg_atoi_call:  .ascii "    adrp x0, _input_buf@PAGE\n    add x0, x0, _input_buf
 _fg_inbuf_ptr:  .ascii "    adrp x0, _input_buf@PAGE\n    add x0, x0, _input_buf@PAGEOFF\n"
                 .byte 0
 _fg_add1:      .asciz "    add x0, x0, #1\n"
+_fg_adrp_x0:   .asciz "    adrp x0, "
+_fg_add_x0:    .asciz "    add x0, x0, "
+_fg_add_imm:   .asciz "    add x0, x0, #"
+_fg_sub_imm:   .asciz "    sub x0, x0, #"
+_fg_cmp_imm:   .asciz "    cmp x0, #"
+_fg_fn_pro:    .ascii "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n    sub sp, sp, #"
+               .byte 0
+_fg_fn_epi:    .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    ret\n"
+               .byte 0
+_fg_bl_uf:     .asciz "    bl _uf_"
+_fg_fn_ret:    .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    ret\n"
+               .byte 0
 
 // ── BSS Section ──
 .section __DATA,__bss
@@ -136,6 +160,11 @@ _fg_add1:      .asciz "    add x0, x0, #1\n"
 .globl _lbl_count
 .globl _str_ptrs, _str_lens, _str_bytes, _str_count
 .globl _wait_stat, _num_buf, _tmp_path_s, _tmp_path_o, _line_num
+.globl _loop_stack, _loop_sp
+.globl _frame_patch_pos
+.globl _fn_tab, _fn_count
+.globl _fn_frame_patches, _fn_patch_count
+.globl _last_is_imm, _last_imm_val
 
 .align 4
 _src_buf:     .space BUF_SIZE
@@ -161,3 +190,12 @@ _num_buf:     .space 24
 _tmp_path_s:  .space 64
 _tmp_path_o:  .space 64
 _line_num:    .space 4
+_loop_stack:  .space 256         // 16 entries * 16 bytes (top_label + end_label)
+_loop_sp:     .space 4
+_frame_patch_pos: .space 8
+_last_is_imm: .space 4
+_last_imm_val: .space 8
+_fn_tab:      .space 2048        // 32 entries * 64 bytes (name_ptr(8), name_len(4), param_count(4), label_num(4), padding)
+_fn_count:    .space 4
+_fn_frame_patches: .space 256    // 32 entries * 8 bytes (out_pos for frame size patch)
+_fn_patch_count:   .space 4

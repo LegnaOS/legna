@@ -30,6 +30,16 @@ _emit_runtime:
     add x0, x0, _rt_readline_code@PAGEOFF
     bl _emit_str
 
+    // _rt_buf_write: buffered output, x1=ptr, x2=len
+    adrp x0, _rt_bufwrite_code@PAGE
+    add x0, x0, _rt_bufwrite_code@PAGEOFF
+    bl _emit_str
+
+    // _rt_flush: flush output buffer
+    adrp x0, _rt_flush_code@PAGE
+    add x0, x0, _rt_flush_code@PAGEOFF
+    bl _emit_str
+
     ldp x29, x30, [sp], #16
     ret
 
@@ -55,12 +65,28 @@ _emit_header:
 
     bl _emit_runtime
 
-    // _main: prologue with fixed frame
+    ldp x29, x30, [sp], #16
+    ret
+
+// _emit_main_prologue - Emit _main: with frame size placeholder
+.globl _emit_main_prologue
+_emit_main_prologue:
+    stp x29, x30, [sp, #-16]!
+
     adrp x0, _fg_main@PAGE
     add x0, x0, _fg_main@PAGEOFF
     bl _emit_str
-    mov x0, #FRAME_MAX
-    bl _emit_num
+    // save current out_pos for frame size patching
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    ldr x0, [x1]
+    adrp x1, _frame_patch_pos@PAGE
+    add x1, x1, _frame_patch_pos@PAGEOFF
+    str x0, [x1]
+    // emit 4-char placeholder "0000"
+    adrp x0, _fg_frame_ph@PAGE
+    add x0, x0, _fg_frame_ph@PAGEOFF
+    bl _emit_str
     adrp x0, _fg_main2@PAGE
     add x0, x0, _fg_main2@PAGEOFF
     bl _emit_str
@@ -84,6 +110,45 @@ _emit_footer:
     adrp x0, _fg_exit@PAGE
     add x0, x0, _fg_exit@PAGEOFF
     bl _emit_str
+
+    // patch frame size placeholder
+    adrp x0, _frame_size@PAGE
+    add x0, x0, _frame_size@PAGEOFF
+    ldr w0, [x0]
+    // minimum 16, round up to 16-byte alignment
+    cmp w0, #16
+    b.ge 1f
+    mov w0, #16
+1:  add w0, w0, #15
+    and w0, w0, #~15
+    // convert to 4-digit decimal and write into _out_buf at _frame_patch_pos
+    // Use leading spaces (not zeros) to avoid GAS octal interpretation
+    mov w5, w0                   // save original value
+    adrp x1, _frame_patch_pos@PAGE
+    add x1, x1, _frame_patch_pos@PAGEOFF
+    ldr x1, [x1]
+    adrp x2, _out_buf@PAGE
+    add x2, x2, _out_buf@PAGEOFF
+    add x2, x2, x1              // dest ptr in out_buf
+    // fill with spaces first
+    mov w4, #' '
+    strb w4, [x2, #0]
+    strb w4, [x2, #1]
+    strb w4, [x2, #2]
+    strb w4, [x2, #3]
+    // write digits right-to-left
+    mov w0, w5
+    add x6, x2, #3              // rightmost position
+2:  mov w3, #10
+    udiv w4, w0, w3
+    msub w7, w4, w3, w0
+    add w7, w7, #'0'
+    strb w7, [x6]
+    mov w0, w4
+    cbz w0, 3f
+    sub x6, x6, #1
+    b 2b
+3:
 
     // .data section with string literals
     adrp x0, _fg_data@PAGE
@@ -324,6 +389,58 @@ _rt_readline_code:
     .ascii "    b.ne 1f\n"
     .ascii "    mov x0, x1\n"
     .ascii "    strb wzr, [x19, x1]\n"
+    .ascii "1:  ldp x29, x30, [sp], #16\n"
+    .ascii "    ret\n\n"
+    .byte 0
+
+_rt_bufwrite_code:
+    .ascii "_rt_buf_write:\n"
+    .ascii "    stp x29, x30, [sp, #-16]!\n"
+    .ascii "    stp x19, x20, [sp, #-16]!\n"
+    .ascii "    stp x21, x22, [sp, #-16]!\n"
+    .ascii "    mov x19, x1\n"
+    .ascii "    mov x20, x2\n"
+    .ascii "    adrp x21, _ob_pos@PAGE\n"
+    .ascii "    add x21, x21, _ob_pos@PAGEOFF\n"
+    .ascii "    ldr x22, [x21]\n"
+    .ascii "    add x3, x22, x20\n"
+    .ascii "    cmp x3, #4096\n"
+    .ascii "    b.lt 1f\n"
+    .ascii "    bl _rt_flush\n"
+    .ascii "    mov x22, #0\n"
+    .ascii "1:  adrp x3, _ob_buf@PAGE\n"
+    .ascii "    add x3, x3, _ob_buf@PAGEOFF\n"
+    .ascii "    add x3, x3, x22\n"
+    .ascii "    mov x4, #0\n"
+    .ascii "2:  cmp x4, x20\n"
+    .ascii "    b.ge 3f\n"
+    .ascii "    ldrb w5, [x19, x4]\n"
+    .ascii "    strb w5, [x3, x4]\n"
+    .ascii "    add x4, x4, #1\n"
+    .ascii "    b 2b\n"
+    .ascii "3:  add x22, x22, x20\n"
+    .ascii "    str x22, [x21]\n"
+    .ascii "    ldp x21, x22, [sp], #16\n"
+    .ascii "    ldp x19, x20, [sp], #16\n"
+    .ascii "    ldp x29, x30, [sp], #16\n"
+    .ascii "    ret\n\n"
+    .byte 0
+
+_rt_flush_code:
+    .ascii "_rt_flush:\n"
+    .ascii "    stp x29, x30, [sp, #-16]!\n"
+    .ascii "    adrp x1, _ob_pos@PAGE\n"
+    .ascii "    add x1, x1, _ob_pos@PAGEOFF\n"
+    .ascii "    ldr x2, [x1]\n"
+    .ascii "    cbz x2, 1f\n"
+    .ascii "    mov x0, #1\n"
+    .ascii "    adrp x1, _ob_buf@PAGE\n"
+    .ascii "    add x1, x1, _ob_buf@PAGEOFF\n"
+    .ascii "    mov x16, #4\n"
+    .ascii "    svc #0x80\n"
+    .ascii "    adrp x1, _ob_pos@PAGE\n"
+    .ascii "    add x1, x1, _ob_pos@PAGEOFF\n"
+    .ascii "    str xzr, [x1]\n"
     .ascii "1:  ldp x29, x30, [sp], #16\n"
     .ascii "    ret\n\n"
     .byte 0

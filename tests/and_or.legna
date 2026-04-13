@@ -1,0 +1,4 @@
+legna:
+    let x = 5
+    if x > 3 and x < 10:
+        output "yes"
