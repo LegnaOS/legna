@@ -41,7 +41,7 @@ make clean      # 清理构建产物
 
 所有模块通过 `.include "src/macos_arm64/defs.inc"` 共享常量定义。Makefile 会自动发现 `src/macos_arm64/*.s` 并编译链接。
 
-## Language features (v0.4)
+## Language features (v0.5)
 
 - `legna:` 入口块（每个文件必须有且仅有一个）
 - `output "string"` / `output var` 标准输出（缓冲 I/O，退出时 flush）
@@ -56,6 +56,10 @@ make clean      # 清理构建产物
 - 布尔运算：`and` `or` `not`（短路求值）
 - 转义序列：`\n` `\t` `\\` `\"`
 - `input_num()` / `input_str()` 标准输入
+- `emit "key" value` 结构化输出（JSON Lines 格式，AI 原生亲和）
+- `open` / `close` / `read_line` / `write_line` 文件 I/O
+- `spawn:` / `wait()` 多进程并发（fork 进程模型）
+- `pipe()` / `send` / `recv` 管道 IPC（JSON Lines 格式）
 - `#` 单行注释（支持行尾注释）
 - 缩进敏感（4 空格或 Tab，Tab 按 4 列对齐）
 - 精确栈帧分配（按实际变量数，16 字节对齐）
@@ -67,4 +71,4 @@ make clean      # 清理构建产物
 - 编译器本身不链接 libc，直接使用 macOS syscall（SYS_WRITE=4, SYS_EXIT=1 等）
 - 汇编使用 GAS 语法（GNU Assembler）
 - 临时文件写入 `/tmp/_legna.s` 和 `/tmp/_legna.o`，编译后自动清理
-- 完整语言规范见 `docs/legna-spec.md`
+- 完整语言规范见 `docs/README.md`（多文件书籍结构）

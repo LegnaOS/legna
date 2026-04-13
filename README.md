@@ -32,21 +32,38 @@ legna:
     output "say \"hello\"\n"
 ```
 
+```legna
+# AI 原生结构化输出（JSON Lines）
+
+legna:
+    emit "status" "ok"
+    emit "count" 42
+```
+
 ## 项目结构
 
 ```
 legna/
-├── src/
-│   └── legnac_darwin_arm64.s   # 编译器源码（纯 ARM64 汇编）
-├── docs/
-│   ├── README.md               # 文档索引
-│   └── legna-spec.md           # 语言规范 v0.1
-├── tests/
-│   ├── run_tests.sh            # 自动化测试
-│   ├── escape.legna            # 转义序列测试
-│   ├── multiline.legna         # 多行输出测试
-│   ├── comments.legna          # 注释测试
-│   └── empty.legna             # 空字符串测试
+├── src/macos_arm64/            # 编译器源码（模块化纯 ARM64 汇编）
+├── docs/                       # 语言手册（多文件书籍结构）
+│   ├── README.md               # 目录
+│   ├── 01-introduction.md      # 前言与设计哲学
+│   ├── 02-quickstart.md        # 快速入门
+│   ├── 03-lexical.md           # 词法结构
+│   ├── 04-types.md             # 类型系统
+│   ├── 05-variables.md         # 变量与赋值
+│   ├── 06-expressions.md       # 表达式
+│   ├── 07-control-flow.md      # 控制流
+│   ├── 08-functions.md         # 函数
+│   ├── 09-io.md                # 输入输出
+│   ├── 10-compiler.md          # 编译器架构
+│   ├── 11-examples.md          # 完整示例
+│   ├── 12-errors.md            # 错误信息参考
+│   ├── 13-changelog.md         # 版本历史
+│   ├── 14-grammar.md           # EBNF 文法
+│   ├── 15-concurrency.md       # 多进程并发
+│   └── 16-ai-native.md         # AI 原生设计
+├── tests/                      # 自动化测试
 ├── helloworld.legna            # Hello World 示例
 ├── Makefile                    # 构建系统
 └── .gitignore
@@ -62,7 +79,7 @@ legna/
 
 ## 文档
 
-完整语言规范见 [docs/legna-spec.md](docs/legna-spec.md)
+完整语言手册见 [docs/README.md](docs/README.md)
 
 ## 测试
 

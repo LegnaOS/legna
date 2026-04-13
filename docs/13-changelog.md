@@ -1,0 +1,56 @@
+# 第 13 章：版本历史
+
+> [← 错误信息参考](12-errors.md) | [返回目录](README.md) | [EBNF 文法 →](14-grammar.md)
+
+---
+
+## v0.5（当前版本）
+
+- `spawn`/`wait` 多进程并发（fork 进程模型）
+- `pipe`/`send`/`recv` 管道 IPC（JSON Lines 格式）
+- `emit` 结构化输出（JSON Lines，AI 原生亲和）
+- `open`/`close`/`read_line`/`write_line` 文件 I/O
+- AI 原生亲和设计：输出默认结构化，天然适配 agent 工作流
+- 新增测试 ~12 个
+
+## v0.4
+
+- `fn`/`return` 用户自定义函数，支持递归
+- 输出缓冲（4KB 运行时缓冲区，退出时 flush）
+- 精确栈帧分配（占位符回填，替代固定 4096）
+- 立即数优化（add/sub/cmp 直接用 `#imm` 形式）
+- Tab 缩进支持（tab-stop 按 4 列对齐）
+- 行内注释支持
+- 测试增至 21 个
+
+## v0.3
+
+- `elif` 条件链
+- `and`/`or`/`not` 布尔运算（短路求值）
+- `break`/`continue` 循环控制
+- `for` 循环表达式边界
+- 修复 `output` 字符串变量输出为空
+- 修复错误信息显示 line 0
+
+## v0.2
+
+- `let` 变量声明与赋值（整数、字符串）
+- `if`/`else` 条件分支
+- `while` 循环
+- `for x in start..end` 范围循环
+- 算术运算：`+` `-` `*` `/` `%`
+- 比较运算：`==` `!=` `<` `>` `<=` `>=`
+- `input_num()` / `input_str()` 标准输入
+- 模块化编译器架构
+
+## v0.1
+
+- `legna:` 程序入口块
+- `output "string"` 标准输出
+- `#` 单行注释
+- 字符串转义序列
+- macOS ARM64 平台支持
+
+---
+
+> [← 错误信息参考](12-errors.md) | [返回目录](README.md) | [EBNF 文法 →](14-grammar.md)
