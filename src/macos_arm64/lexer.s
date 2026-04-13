@@ -487,6 +487,8 @@ _lex_ret:
 // _lex_add_tok: w0=type, x1=len, x2=ptr, x3=value
 // Stores token and advances x22/x23
 _lex_add_tok:
+    cmp x23, #MAX_TOKENS
+    b.ge _lex_overflow
     str w0, [x22]                    // type
     str w1, [x22, #4]               // len
     str x2, [x22, #8]               // ptr
@@ -494,6 +496,15 @@ _lex_add_tok:
     add x22, x22, #TOK_SIZE
     add x23, x23, #1
     ret
+
+_lex_overflow:
+    stp x29, x30, [sp, #-16]!
+    adrp x0, _err_overflow@PAGE
+    add x0, x0, _err_overflow@PAGEOFF
+    bl _print_err
+    mov x0, #1
+    mov x16, #1
+    svc #0x80
 
 // _lex_emit_nl: emit a TOK_NL token
 _lex_emit_nl:
@@ -777,13 +788,125 @@ _mk_try_fn:
 _mk_try_return:
     // "return" (6)
     cmp x20, #6
-    b.ne _mk_ident
+    b.ne _mk_try_spawn
     mov x0, x19
     adrp x1, _kw_return@PAGE
     add x1, x1, _kw_return@PAGEOFF
     mov x2, #6
     bl _strncmp
     cbz x0, _mk_return
+
+// v0.5: Concurrency keywords
+_mk_try_spawn:
+    // "spawn" (5)
+    cmp x20, #5
+    b.ne _mk_try_wait
+    mov x0, x19
+    adrp x1, _kw_spawn@PAGE
+    add x1, x1, _kw_spawn@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_spawn
+
+_mk_try_wait:
+    // "wait" (4)
+    cmp x20, #4
+    b.ne _mk_try_pipe
+    mov x0, x19
+    adrp x1, _kw_wait@PAGE
+    add x1, x1, _kw_wait@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_wait
+
+_mk_try_pipe:
+    // "pipe" (4)
+    cmp x20, #4
+    b.ne _mk_try_send
+    mov x0, x19
+    adrp x1, _kw_pipe@PAGE
+    add x1, x1, _kw_pipe@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_pipe
+
+_mk_try_send:
+    // "send" (4)
+    cmp x20, #4
+    b.ne _mk_try_recv
+    mov x0, x19
+    adrp x1, _kw_send@PAGE
+    add x1, x1, _kw_send@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_send
+
+_mk_try_recv:
+    // "recv" (4)
+    cmp x20, #4
+    b.ne _mk_try_emit
+    mov x0, x19
+    adrp x1, _kw_recv@PAGE
+    add x1, x1, _kw_recv@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_recv
+
+// v0.5: AI-native I/O keywords
+_mk_try_emit:
+    // "emit" (4)
+    cmp x20, #4
+    b.ne _mk_try_open
+    mov x0, x19
+    adrp x1, _kw_emit@PAGE
+    add x1, x1, _kw_emit@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_emit
+
+_mk_try_open:
+    // "open" (4)
+    cmp x20, #4
+    b.ne _mk_try_close
+    mov x0, x19
+    adrp x1, _kw_open@PAGE
+    add x1, x1, _kw_open@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_open
+
+_mk_try_close:
+    // "close" (5)
+    cmp x20, #5
+    b.ne _mk_try_rdline
+    mov x0, x19
+    adrp x1, _kw_close@PAGE
+    add x1, x1, _kw_close@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_close
+
+_mk_try_rdline:
+    // "read_line" (9)
+    cmp x20, #9
+    b.ne _mk_try_wrline
+    mov x0, x19
+    adrp x1, _kw_read_line@PAGE
+    add x1, x1, _kw_read_line@PAGEOFF
+    mov x2, #9
+    bl _strncmp
+    cbz x0, _mk_rdline
+
+_mk_try_wrline:
+    // "write_line" (10)
+    cmp x20, #10
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_write_line@PAGE
+    add x1, x1, _kw_write_line@PAGEOFF
+    mov x2, #10
+    bl _strncmp
+    cbz x0, _mk_wrline
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -841,6 +964,36 @@ _mk_fn:
     b _mk_ret
 _mk_return:
     mov w0, #TOK_KW_RETURN
+    b _mk_ret
+_mk_spawn:
+    mov w0, #TOK_KW_SPAWN
+    b _mk_ret
+_mk_wait:
+    mov w0, #TOK_KW_WAIT
+    b _mk_ret
+_mk_pipe:
+    mov w0, #TOK_KW_PIPE
+    b _mk_ret
+_mk_send:
+    mov w0, #TOK_KW_SEND
+    b _mk_ret
+_mk_recv:
+    mov w0, #TOK_KW_RECV
+    b _mk_ret
+_mk_emit:
+    mov w0, #TOK_KW_EMIT
+    b _mk_ret
+_mk_open:
+    mov w0, #TOK_KW_OPEN
+    b _mk_ret
+_mk_close:
+    mov w0, #TOK_KW_CLOSE
+    b _mk_ret
+_mk_rdline:
+    mov w0, #TOK_KW_RDLINE
+    b _mk_ret
+_mk_wrline:
+    mov w0, #TOK_KW_WRLINE
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

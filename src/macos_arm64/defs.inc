@@ -1,5 +1,5 @@
 // ============================================================
-// defs.inc - Shared constants for legnac v0.2
+// defs.inc - Shared constants for legnac v0.5
 // Include this in every .s file: .include "defs.inc"
 // ============================================================
 
@@ -14,6 +14,7 @@
 .equ SYS_UNLINK,  10
 .equ SYS_GETPID,  20
 .equ SYS_EXECVE,  59
+.equ SYS_PIPE,    42
 
 .equ O_RDONLY,     0
 .equ O_WRCREAT,   0x601
@@ -71,6 +72,19 @@
 .equ TOK_KW_RETURN, 40
 .equ TOK_COMMA,     41
 
+// v0.5: Concurrency + AI-native I/O
+.equ TOK_KW_SPAWN,  42
+.equ TOK_KW_WAIT,   43
+.equ TOK_KW_PIPE,   44
+.equ TOK_KW_SEND,   45
+.equ TOK_KW_RECV,   46
+.equ TOK_KW_EMIT,   47
+.equ TOK_KW_OPEN,   48
+.equ TOK_KW_CLOSE,  49
+.equ TOK_KW_RDLINE, 50
+.equ TOK_KW_WRLINE, 51
+
 // Symbol types
 .equ TY_INT,        0
 .equ TY_STR,        1
+.equ TY_PIPE,       2

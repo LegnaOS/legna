@@ -10,6 +10,7 @@
 .globl _err_usage, _err_open, _err_syntax, _err_indent
 .globl _err_undef, _err_type, _err_nolegna, _err_asm, _err_link
 .globl _err_nl, _msg_ok
+.globl _err_overflow, _err_frame
 _err_usage:    .asciz "usage: legnac <file.legna|.lga> [-o output]\n"
 _err_open:     .asciz "error: cannot open source file\n"
 _err_syntax:   .asciz "error: unexpected token at line "
@@ -19,6 +20,8 @@ _err_type:     .asciz "error: type mismatch at line "
 _err_nolegna:  .asciz "error: missing 'legna:' entry\n"
 _err_asm:      .asciz "error: assembler failed\n"
 _err_link:     .asciz "error: linker failed\n"
+_err_overflow: .asciz "error: compiler buffer overflow\n"
+_err_frame:    .asciz "error: stack frame too large\n"
 _err_nl:       .asciz "\n"
 _msg_ok:       .asciz "compiled successfully\n"
 
@@ -26,6 +29,8 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_while, _kw_for, _kw_in, _kw_input_num, _kw_input_str
 .globl _kw_break, _kw_continue, _kw_and, _kw_or, _kw_not
 .globl _kw_fn, _kw_return
+.globl _kw_spawn, _kw_wait, _kw_pipe, _kw_send, _kw_recv
+.globl _kw_emit, _kw_open, _kw_close, _kw_read_line, _kw_write_line
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -44,6 +49,16 @@ _kw_or:        .asciz "or"
 _kw_not:       .asciz "not"
 _kw_fn:        .asciz "fn"
 _kw_return:    .asciz "return"
+_kw_spawn:     .asciz "spawn"
+_kw_wait:      .asciz "wait"
+_kw_pipe:      .asciz "pipe"
+_kw_send:      .asciz "send"
+_kw_recv:      .asciz "recv"
+_kw_emit:      .asciz "emit"
+_kw_open:      .asciz "open"
+_kw_close:     .asciz "close"
+_kw_read_line: .asciz "read_line"
+_kw_write_line:.asciz "write_line"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -68,8 +83,9 @@ _lnk_x:        .asciz "-x"
 .globl _fg_hdr, _fg_text, _fg_data, _fg_bss, _fg_nl, _fg_comma
 .globl _fg_main, _fg_main2, _fg_frame_ph, _fg_exit
 .globl _fg_ldr, _fg_ldr1, _fg_str_x0, _fg_cb, _fg_mov, _fg_movn
-.globl _fg_push, _fg_pop1, _fg_add, _fg_sub, _fg_mul, _fg_sdiv, _fg_mod
-.globl _fg_cmp0, _fg_cmp1
+.globl _fg_push, _fg_pop0, _fg_pop1, _fg_add, _fg_sub, _fg_mul, _fg_sdiv, _fg_mod
+.globl _fg_add_r, _fg_sub_r, _fg_mul_r, _fg_sdiv_r, _fg_mod_r
+.globl _fg_cmp0, _fg_cmp1, _fg_cmp01
 .globl _fg_ble, _fg_bge, _fg_blt, _fg_bgt, _fg_bne, _fg_beq
 .globl _fg_b, _fg_lbl, _fg_colon
 .globl _fg_wr_fd, _fg_wr_adrp, _fg_wr_add, _fg_wr_len, _fg_wr_sys
@@ -79,12 +95,18 @@ _lnk_x:        .asciz "-x"
 .globl _fg_adrp_x0, _fg_add_x0
 .globl _fg_add_imm, _fg_sub_imm, _fg_cmp_imm
 .globl _fg_fn_pro, _fg_fn_epi, _fg_bl_uf, _fg_fn_ret
+.globl _fg_flush_call, _fg_fork, _fg_cbnz_x1, _fg_child_exit
+.globl _fg_pipe_call, _fg_wait_call, _fg_send_call, _fg_recv_call
+.globl _fg_emit_int_call, _fg_emit_str_call
+.globl _fg_open_r_call, _fg_open_w_call, _fg_close_call
+.globl _fg_readline_fd, _fg_writeline_call
+.globl _fg_mov_x0_fd, _fg_str_x1, _fg_ldr_x1
 
 _fg_hdr:       .ascii ".global _main\n.align 2\n\n"
                .byte 0
 _fg_text:      .asciz ".text\n"
 _fg_data:      .asciz "\n.data\n"
-_fg_bss:       .asciz "\n.bss\n.align 4\n_input_buf: .space 1024\n_itoa_buf: .space 24\n_ob_buf: .space 4096\n_ob_pos: .space 8\n"
+_fg_bss:       .asciz "\n.bss\n.align 4\n_input_buf: .space 1024\n_itoa_buf: .space 24\n_ob_buf: .space 4096\n_ob_pos: .space 8\n_recv_buf: .space 1024\n_path_buf: .space 256\n"
 _fg_nl:        .asciz "\n"
 _fg_comma:     .asciz ", "
 _fg_main:      .ascii "_main:\n    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n    sub sp, sp, #"
@@ -100,15 +122,23 @@ _fg_cb:        .asciz "]\n"
 _fg_mov:       .asciz "    mov x0, #"
 _fg_movn:      .asciz "    mov x0, #-"
 _fg_push:      .asciz "    str x0, [sp, #-16]!\n"
+_fg_pop0:      .asciz "    ldr x0, [sp], #16\n"
 _fg_pop1:      .asciz "    ldr x1, [sp], #16\n"
 _fg_add:       .asciz "    add x0, x1, x0\n"
 _fg_sub:       .asciz "    sub x0, x1, x0\n"
+_fg_add_r:     .asciz "    add x0, x0, x1\n"
+_fg_sub_r:     .asciz "    sub x0, x0, x1\n"
 _fg_mul:       .asciz "    mul x0, x1, x0\n"
 _fg_sdiv:      .asciz "    sdiv x0, x1, x0\n"
 _fg_mod:       .ascii "    sdiv x2, x1, x0\n    msub x0, x2, x0, x1\n"
                .byte 0
+_fg_mul_r:     .asciz "    mul x0, x0, x1\n"
+_fg_sdiv_r:    .asciz "    sdiv x0, x0, x1\n"
+_fg_mod_r:     .ascii "    sdiv x2, x0, x1\n    msub x0, x2, x1, x0\n"
+               .byte 0
 _fg_cmp0:      .asciz "    cmp x0, #"
 _fg_cmp1:      .asciz "    cmp x1, x0\n"
+_fg_cmp01:     .asciz "    cmp x0, x1\n"
 _fg_ble:       .asciz "    b.le "
 _fg_bge:       .asciz "    b.ge "
 _fg_blt:       .asciz "    b.lt "
@@ -150,6 +180,32 @@ _fg_bl_uf:     .asciz "    bl _uf_"
 _fg_fn_ret:    .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    ret\n"
                .byte 0
 
+// v0.5: Concurrency fragments
+_fg_flush_call: .asciz "    bl _rt_flush\n"
+_fg_fork:       .ascii "    mov x16, #2\n    svc #0x80\n    cbnz x1, "
+                .byte 0
+_fg_cbnz_x1:   .asciz "    cbnz x1, "
+_fg_child_exit: .ascii "    bl _rt_flush\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
+                .byte 0
+_fg_pipe_call:  .asciz "    bl _rt_pipe\n"
+_fg_wait_call:  .asciz "    bl _rt_wait\n"
+_fg_send_call:  .asciz "    bl _rt_send\n"
+_fg_recv_call:  .asciz "    bl _rt_recv\n"
+
+// v0.5: AI-native I/O fragments
+_fg_emit_int_call: .asciz "    bl _rt_emit_int\n"
+_fg_emit_str_call: .asciz "    bl _rt_emit_str\n"
+
+// v0.5: File I/O fragments
+_fg_open_r_call: .asciz "    bl _rt_open_r\n"
+_fg_open_w_call: .asciz "    bl _rt_open_w\n"
+_fg_close_call:  .asciz "    bl _rt_close\n"
+_fg_readline_fd: .asciz "    bl _rt_read_line_fd\n"
+_fg_writeline_call: .asciz "    bl _rt_write_line\n"
+_fg_mov_x0_fd:  .asciz "    mov x0, x"
+_fg_str_x1:     .asciz "    str x1, [x29, #-"
+_fg_ldr_x1:     .asciz "    ldr x1, [x29, #-"
+
 // ── BSS Section ──
 .section __DATA,__bss
 
@@ -164,7 +220,8 @@ _fg_fn_ret:    .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    ret\n"
 .globl _frame_patch_pos
 .globl _fn_tab, _fn_count
 .globl _fn_frame_patches, _fn_patch_count
-.globl _last_is_imm, _last_imm_val
+.globl _last_is_imm, _last_imm_val, _last_imm_out_pos
+.globl _last_is_var, _last_var_offset, _last_var_out_pos
 
 .align 4
 _src_buf:     .space BUF_SIZE
@@ -195,6 +252,10 @@ _loop_sp:     .space 4
 _frame_patch_pos: .space 8
 _last_is_imm: .space 4
 _last_imm_val: .space 8
+_last_imm_out_pos: .space 8
+_last_is_var:  .space 4
+_last_var_offset: .space 4
+_last_var_out_pos: .space 8
 _fn_tab:      .space 2048        // 32 entries * 64 bytes (name_ptr(8), name_len(4), param_count(4), label_num(4), padding)
 _fn_count:    .space 4
 _fn_frame_patches: .space 256    // 32 entries * 8 bytes (out_pos for frame size patch)

@@ -150,8 +150,8 @@ _sym_insert:
     adrp x0, _sym_count@PAGE
     add x0, x0, _sym_count@PAGEOFF
     ldr w22, [x0]               // current count
-
-    // compute entry address
+    cmp w22, #MAX_SYMS
+    b.ge _parser_overflow
     adrp x1, _sym_tab@PAGE
     add x1, x1, _sym_tab@PAGEOFF
     mov x2, #SYM_SIZE
@@ -198,6 +198,8 @@ _reg_string:
     adrp x2, _str_count@PAGE
     add x2, x2, _str_count@PAGEOFF
     ldr w3, [x2]
+    cmp w3, #MAX_STRS
+    b.ge _parser_overflow
     adrp x4, _str_ptrs@PAGE
     add x4, x4, _str_ptrs@PAGEOFF
     str x19, [x4, x3, lsl #3]
@@ -694,6 +696,18 @@ _pb_ret:
     ret
 
 // ────────────────────────────────────────
+// _parser_overflow - Fatal: compiler buffer overflow
+// ────────────────────────────────────────
+_parser_overflow:
+    stp x29, x30, [sp, #-16]!
+    adrp x0, _err_overflow@PAGE
+    add x0, x0, _err_overflow@PAGEOFF
+    bl _print_err
+    mov x0, #1
+    mov x16, #1
+    svc #0x80
+
+// ────────────────────────────────────────
 // _parse_statement - Dispatch on token type
 // ────────────────────────────────────────
 _parse_statement:
@@ -739,8 +753,29 @@ _parse_statement:
     bl _parse_continue
     b _ps_ret
 10: cmp w0, #TOK_KW_RETURN
-    b.ne 7f
+    b.ne 11f
     bl _parse_return
+    b _ps_ret
+// v0.5: AI-native I/O + File I/O + Concurrency
+11: cmp w0, #TOK_KW_EMIT
+    b.ne 12f
+    bl _parse_emit
+    b _ps_ret
+12: cmp w0, #TOK_KW_CLOSE
+    b.ne 13f
+    bl _parse_close
+    b _ps_ret
+13: cmp w0, #TOK_KW_WRLINE
+    b.ne 14f
+    bl _parse_write_line
+    b _ps_ret
+14: cmp w0, #TOK_KW_SEND
+    b.ne 15f
+    bl _parse_send
+    b _ps_ret
+15: cmp w0, #TOK_KW_RECV
+    b.ne 7f
+    bl _parse_recv
     b _ps_ret
 7:  // unexpected token
     bl _tok_line
@@ -785,9 +820,20 @@ _parse_let:
     cmp w0, #TOK_STR
     b.eq 1f
     cmp w0, #TOK_KW_INSTR
-    b.ne 2f
+    b.eq 1f
+    cmp w0, #TOK_KW_RDLINE
+    b.eq 1f
+    b 2f
 1:  mov w21, #TY_STR
 2:
+    // v0.5: check for pipe() → TY_PIPE
+    cmp w0, #TOK_KW_PIPE
+    b.ne 3f
+    mov w21, #TY_PIPE
+3:
+    // v0.5: check for spawn: → fork block
+    cmp w0, #TOK_KW_SPAWN
+    b.eq _pl_spawn
     // insert symbol
     mov x0, x19
     mov x1, x20
@@ -798,6 +844,8 @@ _parse_let:
     // parse expression
     cmp w21, #TY_STR
     b.eq _pl_str_init
+    cmp w21, #TY_PIPE
+    b.eq _pl_pipe_init
 
     // integer: parse expr, emit store
     bl _parse_expr
@@ -896,6 +944,94 @@ _pl_str_input:
     ldr w0, [x22, #16]
     bl _emit_store_var
     b _pl_nl
+
+// v0.5: let p = pipe()
+_pl_pipe_init:
+    // pipe() returns read_fd in x0, write_fd in x1
+    bl _parse_expr               // emits bl _rt_pipe
+    cmp x0, #0
+    b.lt _pl_err
+    // store read_fd (x0) at offset
+    ldr w0, [x22, #16]
+    bl _emit_store_var
+    // store write_fd (x1) at offset+8
+    // emit: str x1, [x29, #-(offset+8)]
+    adrp x0, _fg_str_x1@PAGE
+    add x0, x0, _fg_str_x1@PAGEOFF
+    bl _emit_str
+    ldr w0, [x22, #16]
+    add w0, w0, #8
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
+    bl _emit_str
+    b _pl_nl
+
+// v0.5: let pid = spawn:
+_pl_spawn:
+    // insert symbol as TY_INT (PID is an integer)
+    mov x0, x19
+    mov x1, x20
+    mov w2, #TY_INT
+    bl _sym_insert
+    mov x22, x0                 // entry ptr
+
+    bl _tok_advance              // skip "spawn"
+    // expect ":"
+    mov w0, #TOK_COLON
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pl_err
+    bl _skip_nl
+    // expect INDENT
+    mov w0, #TOK_INDENT
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pl_err
+
+    // allocate labels
+    bl _new_label
+    mov x19, x0                 // child_label
+    bl _new_label
+    mov x20, x0                 // end_label
+
+    // emit: flush + fork
+    adrp x0, _fg_flush_call@PAGE
+    add x0, x0, _fg_flush_call@PAGEOFF
+    bl _emit_str
+    // emit: fork syscall
+    adrp x0, _pspawn_fork@PAGE
+    add x0, x0, _pspawn_fork@PAGEOFF
+    bl _emit_str
+    // emit child label ref
+    adrp x0, _fg_lbl@PAGE
+    add x0, x0, _fg_lbl@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    // parent path: store PID (x0) to variable
+    ldr w0, [x22, #16]
+    bl _emit_store_var
+    // branch to end
+    mov x0, x20
+    bl _emit_branch
+    // child label
+    mov x0, x19
+    bl _emit_label
+    // parse child block
+    bl _parse_block
+    // emit child exit
+    adrp x0, _pspawn_exit@PAGE
+    add x0, x0, _pspawn_exit@PAGEOFF
+    bl _emit_str
+    // end label
+    mov x0, x20
+    bl _emit_label
+    mov x0, #0
+    b _pl_ret
 
 _pl_nl:
     bl _skip_nl
@@ -1083,11 +1219,23 @@ _parse_condition:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
 
     // left expr
     bl _parse_expr
     cmp x0, #0
     b.lt _pc_err
+
+    // save out_pos before push (for potential rewind)
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x21, [x0]               // x21 = push_pos
+
+    // check if left is a simple var (for optimization)
+    adrp x0, _last_is_var@PAGE
+    add x0, x0, _last_is_var@PAGEOFF
+    ldr w22, [x0]               // w22 = left_is_var flag
+    str wzr, [x0]               // clear
 
     // push left
     adrp x0, _fg_push@PAGE
@@ -1117,6 +1265,13 @@ _parse_condition:
     cmp x0, #0
     b.lt _pc_err
 
+    // check _last_is_var for right operand
+    adrp x0, _last_is_var@PAGE
+    add x0, x0, _last_is_var@PAGEOFF
+    ldr w20, [x0]
+    str wzr, [x0]               // clear flag
+    cbnz w20, _pc_var_opt
+
     // check _last_is_imm for right operand
     adrp x0, _last_is_imm@PAGE
     add x0, x0, _last_is_imm@PAGEOFF
@@ -1124,13 +1279,11 @@ _parse_condition:
     str wzr, [x0]               // clear flag
     cbz w20, _pc_no_imm
 
-    // immediate: pop left into x0, cmp x0, #imm
-    adrp x0, _fg_pop1@PAGE
-    add x0, x0, _fg_pop1@PAGEOFF
-    bl _emit_str
-    adrp x0, _pe_mov_x0_x1@PAGE
-    add x0, x0, _pe_mov_x0_x1@PAGEOFF
-    bl _emit_str
+    // immediate right: rewind to before push (erases push + dead mov)
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    str x21, [x1]
+    // emit: cmp x0, #imm
     adrp x0, _fg_cmp_imm@PAGE
     add x0, x0, _fg_cmp_imm@PAGEOFF
     bl _emit_str
@@ -1140,6 +1293,34 @@ _parse_condition:
     bl _emit_num
     adrp x0, _fg_nl@PAGE
     add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    b _pc_done
+
+_pc_var_opt:
+    // clear _last_is_imm in case it was also set
+    adrp x0, _last_is_imm@PAGE
+    add x0, x0, _last_is_imm@PAGEOFF
+    str wzr, [x0]
+    // rewind to before push (erases push + right's ldr x0)
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    str x21, [x1]
+    // load right var offset
+    adrp x0, _last_var_offset@PAGE
+    add x0, x0, _last_var_offset@PAGEOFF
+    ldr w20, [x0]              // w20 = right var offset
+    // emit: ldr x1, [x29, #-offset]\n
+    adrp x0, _fg_ldr1@PAGE
+    add x0, x0, _fg_ldr1@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
+    bl _emit_str
+    // emit: cmp x0, x1
+    adrp x0, _fg_cmp01@PAGE
+    add x0, x0, _fg_cmp01@PAGEOFF
     bl _emit_str
     b _pc_done
 
@@ -1159,6 +1340,7 @@ _pc_done:
 _pc_err:
     mov x0, #-1
 _pc_ret:
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret
@@ -1446,19 +1628,21 @@ _parse_for:
     mov x0, x24
     bl _emit_label
 
-    // emit: load loop var, push, load end bound, pop x1, cmp x1, x0
+    // emit: load loop var, load end bound into x1, cmp x0, x1
     ldr w0, [x21, #16]
     bl _emit_load_var
-    adrp x0, _fg_push@PAGE
-    add x0, x0, _fg_push@PAGEOFF
+    // emit: ldr x1, [x29, #-end_offset]\n
+    adrp x0, _fg_ldr1@PAGE
+    add x0, x0, _fg_ldr1@PAGEOFF
     bl _emit_str
-    mov w0, w22                  // end_bound offset
-    bl _emit_load_var
-    adrp x0, _fg_pop1@PAGE
-    add x0, x0, _fg_pop1@PAGEOFF
+    mov x0, x22
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
     bl _emit_str
-    adrp x0, _fg_cmp1@PAGE
-    add x0, x0, _fg_cmp1@PAGEOFF
+    // emit: cmp x0, x1
+    adrp x0, _fg_cmp01@PAGE
+    add x0, x0, _fg_cmp01@PAGEOFF
     bl _emit_str
     // emit: b.ge lbl_end (if loop_var >= end, exit)
     mov w0, #TOK_LT             // for < end, invert = b.ge
@@ -1518,6 +1702,7 @@ _parse_expr:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
 
     bl _parse_term
     cmp x0, #0
@@ -1532,8 +1717,11 @@ _pe_loop:
     b _pe_done
 1:  mov w19, w0                  // save op
     bl _tok_advance
-    // check if right operand is immediate (for +/-)
-    // first, save left value by pushing
+    // save out_pos before push (for potential rewind)
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x21, [x0]               // x21 = push_pos
+    // emit push
     adrp x0, _fg_push@PAGE
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
@@ -1541,20 +1729,26 @@ _pe_loop:
     bl _parse_term
     cmp x0, #0
     b.lt _pe_err
+
+    // check _last_is_var flag first
+    adrp x0, _last_is_var@PAGE
+    add x0, x0, _last_is_var@PAGEOFF
+    ldr w20, [x0]
+    str wzr, [x0]               // clear flag
+    cbnz w20, _pe_var_opt
+
     // check _last_is_imm flag
     adrp x0, _last_is_imm@PAGE
     add x0, x0, _last_is_imm@PAGEOFF
     ldr w20, [x0]
     str wzr, [x0]               // clear flag
     cbz w20, _pe_no_imm
-    // immediate optimization: pop left, use add/sub x0, x0, #imm
-    adrp x0, _fg_pop1@PAGE
-    add x0, x0, _fg_pop1@PAGEOFF
-    bl _emit_str
-    // emit: mov x0, x1 (move popped left to x0)
-    adrp x0, _pe_mov_x0_x1@PAGE
-    add x0, x0, _pe_mov_x0_x1@PAGEOFF
-    bl _emit_str
+
+    // immediate: rewind to before push (erases push + dead mov)
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    str x21, [x1]
+    // emit add/sub with immediate directly
     cmp w19, #TOK_PLUS
     b.ne _pe_imm_sub
     adrp x0, _fg_add_imm@PAGE
@@ -1571,6 +1765,41 @@ _pe_imm_emit:
     bl _emit_num
     adrp x0, _fg_nl@PAGE
     add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    b _pe_loop
+
+_pe_var_opt:
+    // clear _last_is_imm in case it was also set
+    adrp x0, _last_is_imm@PAGE
+    add x0, x0, _last_is_imm@PAGEOFF
+    str wzr, [x0]
+    // rewind to before push (erases push + right's ldr x0)
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    str x21, [x1]
+    // load right var offset
+    adrp x0, _last_var_offset@PAGE
+    add x0, x0, _last_var_offset@PAGEOFF
+    ldr w20, [x0]              // w20 = right var offset
+    // emit: ldr x1, [x29, #-offset]\n
+    adrp x0, _fg_ldr1@PAGE
+    add x0, x0, _fg_ldr1@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
+    bl _emit_str
+    // emit add/sub: x0 op x1 → x0
+    cmp w19, #TOK_PLUS
+    b.ne _pe_var_sub
+    adrp x0, _fg_add_r@PAGE
+    add x0, x0, _fg_add_r@PAGEOFF
+    b _pe_var_emit
+_pe_var_sub:
+    adrp x0, _fg_sub_r@PAGE
+    add x0, x0, _fg_sub_r@PAGEOFF
+_pe_var_emit:
     bl _emit_str
     b _pe_loop
 
@@ -1596,6 +1825,7 @@ _pe_done:
 _pe_err:
     mov x0, #-1
 _pe_ret:
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret
@@ -1605,6 +1835,7 @@ _parse_term:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
 
     bl _parse_factor
     cmp x0, #0
@@ -1621,15 +1852,79 @@ _pt_loop:
     b _pt_done
 1:  mov w19, w0
     bl _tok_advance
+    // save out_pos before push (for potential rewind)
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x21, [x0]               // x21 = push_pos
     adrp x0, _fg_push@PAGE
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
     bl _parse_factor
     cmp x0, #0
     b.lt _pt_err
+
+    // check _last_is_var for right operand
+    adrp x0, _last_is_var@PAGE
+    add x0, x0, _last_is_var@PAGEOFF
+    ldr w20, [x0]
+    str wzr, [x0]               // clear flag
+    cbnz w20, _pt_var_opt
+
+    // check _last_is_imm — can still eliminate push/pop
+    adrp x0, _last_is_imm@PAGE
+    add x0, x0, _last_is_imm@PAGEOFF
+    ldr w20, [x0]
+    str wzr, [x0]
+    cbz w20, _pt_no_opt
+
+    // imm right: rewind to before push (erases push + dead mov)
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    str x21, [x1]
+    // emit: mov x1, #imm
+    adrp x0, _pt_mov_x1_imm@PAGE
+    add x0, x0, _pt_mov_x1_imm@PAGEOFF
+    bl _emit_str
+    adrp x0, _last_imm_val@PAGE
+    add x0, x0, _last_imm_val@PAGEOFF
+    ldr x0, [x0]
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    b _pt_emit_op_r
+
+_pt_var_opt:
+    // clear _last_is_imm in case it was also set
+    adrp x0, _last_is_imm@PAGE
+    add x0, x0, _last_is_imm@PAGEOFF
+    str wzr, [x0]
+    // rewind to before push (erases push + right's ldr x0)
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    str x21, [x1]
+    // load right var offset
+    adrp x0, _last_var_offset@PAGE
+    add x0, x0, _last_var_offset@PAGEOFF
+    ldr w20, [x0]
+    // emit: ldr x1, [x29, #-offset]\n
+    adrp x0, _fg_ldr1@PAGE
+    add x0, x0, _fg_ldr1@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
+    bl _emit_str
+    b _pt_emit_op_r
+
+_pt_no_opt:
+    // fallback: pop left into x1
     adrp x0, _fg_pop1@PAGE
     add x0, x0, _fg_pop1@PAGEOFF
     bl _emit_str
+
+    // emit mul/sdiv/mod with original operand order (x1=left, x0=right)
     cmp w19, #TOK_STAR
     b.ne 2f
     adrp x0, _fg_mul@PAGE
@@ -1643,6 +1938,31 @@ _pt_loop:
 3:  adrp x0, _fg_mod@PAGE
     add x0, x0, _fg_mod@PAGEOFF
 4:  bl _emit_str
+    // clear _last_is_var (term result is not a simple var)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    b _pt_loop
+
+_pt_emit_op_r:
+    // emit mul/sdiv/mod with reversed operand order (x0=left, x1=right)
+    cmp w19, #TOK_STAR
+    b.ne 5f
+    adrp x0, _fg_mul_r@PAGE
+    add x0, x0, _fg_mul_r@PAGEOFF
+    b 7f
+5:  cmp w19, #TOK_SLASH
+    b.ne 6f
+    adrp x0, _fg_sdiv_r@PAGE
+    add x0, x0, _fg_sdiv_r@PAGEOFF
+    b 7f
+6:  adrp x0, _fg_mod_r@PAGE
+    add x0, x0, _fg_mod_r@PAGEOFF
+7:  bl _emit_str
+    // clear _last_is_var (term result is not a simple var)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
     b _pt_loop
 
 _pt_done:
@@ -1651,6 +1971,7 @@ _pt_done:
 _pt_err:
     mov x0, #-1
 _pt_ret:
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret
@@ -1660,6 +1981,11 @@ _parse_factor:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
+
+    // clear _last_is_var flag (set only in variable load path)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
 
     bl _tok_peek
 
@@ -1682,6 +2008,13 @@ _parse_factor:
     adrp x0, _last_imm_val@PAGE
     add x0, x0, _last_imm_val@PAGEOFF
     str x19, [x0]
+    // save out_pos for potential rewind of dead mov
+    adrp x1, _out_pos@PAGE
+    add x1, x1, _out_pos@PAGEOFF
+    ldr x1, [x1]
+    adrp x0, _last_imm_out_pos@PAGE
+    add x0, x0, _last_imm_out_pos@PAGEOFF
+    str x1, [x0]
     mov x0, x19
     bl _emit_mov_imm
     mov x0, #0
@@ -1732,7 +2065,23 @@ _pfac_ident:
     mov x1, x20
     bl _sym_lookup
     cbz x0, _pfac_undef
-    ldr w0, [x0, #16]           // offset
+    ldr w19, [x0, #16]          // offset (reuse x19, done with name)
+    // set _last_is_var flag
+    adrp x0, _last_is_var@PAGE
+    add x0, x0, _last_is_var@PAGEOFF
+    mov w1, #1
+    str w1, [x0]
+    adrp x0, _last_var_offset@PAGE
+    add x0, x0, _last_var_offset@PAGEOFF
+    str w19, [x0]
+    // save out_pos before emitting ldr
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x0, [x0]
+    adrp x1, _last_var_out_pos@PAGE
+    add x1, x1, _last_var_out_pos@PAGEOFF
+    str x0, [x1]
+    mov w0, w19
     bl _emit_load_var
     mov x0, #0
     b _pfac_ret
@@ -1742,6 +2091,10 @@ _pfac_fn_call:
     mov x0, x19
     mov x1, x20
     bl _emit_fn_call
+    // clear _last_is_var (fn call result is not a simple var)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
     // result is in x0 of generated code
     b _pfac_ret
 
@@ -1773,7 +2126,7 @@ _pfac_innum:
 
 _pfac_instr:
     cmp w0, #TOK_KW_INSTR
-    b.ne _pfac_lparen
+    b.ne _pfac_pipe
     adrp x1, _last_is_imm@PAGE
     add x1, x1, _last_is_imm@PAGEOFF
     str wzr, [x1]
@@ -1793,6 +2146,186 @@ _pfac_instr:
     mov x0, #0
     b _pfac_ret
 
+// v0.5: pipe() expression
+_pfac_pipe:
+    cmp w0, #TOK_KW_PIPE
+    b.ne _pfac_open
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // emit: bl _rt_pipe (x0=read_fd, x1=write_fd)
+    adrp x0, _fg_pipe_call@PAGE
+    add x0, x0, _fg_pipe_call@PAGEOFF
+    bl _emit_str
+    mov x0, #0
+    b _pfac_ret
+
+// v0.5: open("path", "r"/"w") expression
+_pfac_open:
+    cmp w0, #TOK_KW_OPEN
+    b.ne _pfac_rdline
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // get path string
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.ne _pfac_err
+    bl _tok_current
+    ldr x19, [x0, #8]           // path ptr
+    ldr w20, [x0, #4]           // path len
+    bl _tok_advance
+    // expect comma
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // get mode string
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.ne _pfac_err
+    bl _tok_current
+    ldr x0, [x0, #8]            // mode ptr
+    ldrb w0, [x0]               // first char: 'r' or 'w'
+    str x0, [sp, #-16]!         // save mode char
+    bl _tok_advance
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // register path string and load address
+    mov x0, x19
+    mov x1, x20
+    bl _reg_string
+    mov x19, x0                 // string index
+    // emit: adrp x0, _sN@PAGE / add x0, x0, _sN@PAGEOFF
+    adrp x0, _fg_adrp_x0@PAGE
+    add x0, x0, _fg_adrp_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_add_x0@PAGE
+    add x0, x0, _fg_add_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // emit: mov x1, #path_len (for _rt_open_r/w: x0=path_ptr, x1=path_len)
+    adrp x0, _pemit_mov_x1_imm@PAGE
+    add x0, x0, _pemit_mov_x1_imm@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    // check mode
+    ldr x0, [sp], #16           // restore mode char
+    cmp w0, #'w'
+    b.eq _pfac_open_w
+    // read mode
+    adrp x0, _fg_open_r_call@PAGE
+    add x0, x0, _fg_open_r_call@PAGEOFF
+    bl _emit_str
+    mov x0, #0
+    b _pfac_ret
+_pfac_open_w:
+    adrp x0, _fg_open_w_call@PAGE
+    add x0, x0, _fg_open_w_call@PAGEOFF
+    bl _emit_str
+    mov x0, #0
+    b _pfac_ret
+
+// v0.5: read_line(fd) expression
+_pfac_rdline:
+    cmp w0, #TOK_KW_RDLINE
+    b.ne _pfac_wait
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    bl _parse_expr               // fd in x0
+    cmp x0, #0
+    b.lt _pfac_err
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_readline_fd@PAGE
+    add x0, x0, _fg_readline_fd@PAGEOFF
+    bl _emit_str
+    // clear flags (rdline result is not simple var/imm)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
+// v0.5: wait(pid) expression
+_pfac_wait:
+    cmp w0, #TOK_KW_WAIT
+    b.ne _pfac_lparen
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    bl _parse_expr               // pid in x0
+    cmp x0, #0
+    b.lt _pfac_err
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // emit: bl _rt_wait (x0=pid → x0=exit_status)
+    adrp x0, _fg_wait_call@PAGE
+    add x0, x0, _fg_wait_call@PAGEOFF
+    bl _emit_str
+    // clear flags (wait result is not simple var/imm)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
 _pfac_lparen:
     cmp w0, #TOK_LPAREN
     b.ne _pfac_neg
@@ -1807,6 +2340,13 @@ _pfac_lparen:
     bl _tok_expect
     cmp x0, #0
     b.lt _pfac_err
+    // clear flags (paren result is not simple var/imm)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
     mov x0, #0
     b _pfac_ret
 
@@ -1821,6 +2361,13 @@ _pfac_neg:
     bl _parse_factor
     cmp x0, #0
     b.lt _pfac_err
+    // clear flags (neg result is not simple var/imm)
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
     // emit: neg x0, x0
     adrp x0, _pfac_neg_str@PAGE
     add x0, x0, _pfac_neg_str@PAGEOFF
@@ -1850,6 +2397,8 @@ _loop_push:
     adrp x2, _loop_sp@PAGE
     add x2, x2, _loop_sp@PAGEOFF
     ldr w3, [x2]
+    cmp w3, #16
+    b.ge _parser_overflow
     adrp x4, _loop_stack@PAGE
     add x4, x4, _loop_stack@PAGEOFF
     mov x5, x3
@@ -2060,9 +2609,20 @@ _efc_args_done:
     cmp x0, #0
     b.lt _efc_err
 
+    // single-arg optimization: skip push/pop round-trip
+    cmp w22, #1
+    b.ne _efc_multi_args
+    // rewind the push (x0 already has the arg value)
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x1, [x0]
+    // push emitted 24 bytes: "    str x0, [sp, #-16]!\n"
+    sub x1, x1, #24
+    str x1, [x0]
+    b _efc_emit_call
+
+_efc_multi_args:
     // pop args into registers in reverse order
-    // args were pushed in order: arg0, arg1, arg2...
-    // so we pop in reverse: last arg first
     mov w0, w22
     sub w0, w0, #1              // start from last arg
 _efc_pop_args:
@@ -2371,12 +2931,612 @@ _pret_err:
     ldp x29, x30, [sp], #16
     ret
 
+// ────────────────────────────────────────
+// v0.5: _parse_emit - emit "key" value
+// ────────────────────────────────────────
+_parse_emit:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+
+    bl _tok_advance              // skip "emit"
+
+    // get key string literal
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.ne _pemit_err
+    bl _tok_current
+    ldr x19, [x0, #8]           // key ptr
+    ldr w20, [x0, #4]           // key len
+    bl _tok_advance
+
+    // register key string
+    mov x0, x19
+    mov x1, x20
+    bl _reg_string
+    mov x21, x0                 // key string index
+
+    // check value type: string literal or expression
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.eq _pemit_str_val
+
+    // integer/expression value: use push/pop to preserve registers
+    // Strategy:
+    //   adrp x0, _sK@PAGE; add x0, x0, _sK@PAGEOFF  (key addr)
+    //   mov x1, #key_len
+    //   str x0, [sp, #-16]!   (push key_addr)
+    //   str x1, [sp, #-16]!   (push key_len)
+    //   <parse expr → x0 = int value>
+    //   mov x2, x0            (int value to x2)
+    //   ldr x1, [sp], #16     (pop key_len)
+    //   ldr x0, [sp], #16     (pop key_addr)
+    //   bl _rt_emit_int
+
+    // load key addr into x0
+    adrp x0, _fg_adrp_x0@PAGE
+    add x0, x0, _fg_adrp_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x21
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_add_x0@PAGE
+    add x0, x0, _fg_add_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x21
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // push key addr
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    // emit: mov x0, #key_len then push
+    adrp x0, _fg_mov@PAGE
+    add x0, x0, _fg_mov@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    // parse value expression → x0 = int value
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pemit_err
+    // mov x2, x0 (int value)
+    adrp x0, _pemit_mov_x2@PAGE
+    add x0, x0, _pemit_mov_x2@PAGEOFF
+    bl _emit_str
+    // pop key_len → x1
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    // pop key_addr → x0
+    adrp x0, _pemit_pop_x0@PAGE
+    add x0, x0, _pemit_pop_x0@PAGEOFF
+    bl _emit_str
+    // now x0=key_ptr, x1=key_len, x2=int_value
+    adrp x0, _fg_emit_int_call@PAGE
+    add x0, x0, _fg_emit_int_call@PAGEOFF
+    bl _emit_str
+    b _pemit_nl
+
+_pemit_str_val:
+    // string value
+    bl _tok_current
+    ldr x19, [x0, #8]           // val ptr
+    ldr w22, [x0, #4]           // val len
+    bl _tok_advance
+    // register value string
+    mov x0, x19
+    mov x1, x22
+    bl _reg_string
+    mov x22, x0                 // val string index
+
+    // Strategy: compute val byte_len at compile time, then emit:
+    //   adrp x0, _sK@PAGE; add x0, x0, _sK@PAGEOFF  (key addr)
+    //   mov x1, #key_len
+    //   str x0, [sp, #-16]!   (push key_addr)
+    //   str x1, [sp, #-16]!   (push key_len)
+    //   adrp x0, _sV@PAGE; add x0, x0, _sV@PAGEOFF  (val addr)
+    //   mov x3, #val_byte_len
+    //   mov x2, x0            (val addr to x2)
+    //   ldr x1, [sp], #16     (pop key_len)
+    //   ldr x0, [sp], #16     (pop key_addr)
+    //   bl _rt_emit_str
+
+    // compute val byte_len at compile time
+    adrp x1, _str_ptrs@PAGE
+    add x1, x1, _str_ptrs@PAGEOFF
+    ldr x1, [x1, x22, lsl #3]
+    adrp x2, _str_lens@PAGE
+    add x2, x2, _str_lens@PAGEOFF
+    ldr w2, [x2, x22, lsl #2]
+    mov x3, #0
+    mov x4, #0
+31: cmp w3, w2
+    b.ge 32f
+    ldrb w5, [x1, x3]
+    cmp w5, #'\\'
+    b.ne 33f
+    add x3, x3, #1
+33: add x3, x3, #1
+    add x4, x4, #1
+    b 31b
+32: // x4 = val byte_len
+    str x4, [sp, #-16]!         // save val_byte_len for later
+
+    // emit: load key addr to x0
+    adrp x0, _fg_adrp_x0@PAGE
+    add x0, x0, _fg_adrp_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x21
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_add_x0@PAGE
+    add x0, x0, _fg_add_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x21
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // emit: mov x1, #key_len
+    adrp x0, _pemit_mov_x1_imm@PAGE
+    add x0, x0, _pemit_mov_x1_imm@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    // emit: push x0 (key addr)
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    // emit: push x1 (key len) — use str x1
+    adrp x0, _pemit_push_x1@PAGE
+    add x0, x0, _pemit_push_x1@PAGEOFF
+    bl _emit_str
+    // emit: load val addr to x0
+    adrp x0, _fg_adrp_x0@PAGE
+    add x0, x0, _fg_adrp_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x22
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_add_x0@PAGE
+    add x0, x0, _fg_add_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x22
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // emit: mov x3, #val_byte_len
+    adrp x0, _pfac_mov_x3@PAGE
+    add x0, x0, _pfac_mov_x3@PAGEOFF
+    bl _emit_str
+    ldr x0, [sp], #16           // restore val_byte_len
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    // emit: mov x2, x0 (val addr)
+    adrp x0, _pemit_mov_x2@PAGE
+    add x0, x0, _pemit_mov_x2@PAGEOFF
+    bl _emit_str
+    // emit: pop x1 (key_len)
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    // emit: ldr x0, [sp], #16 (pop key_addr)
+    adrp x0, _pemit_pop_x0@PAGE
+    add x0, x0, _pemit_pop_x0@PAGEOFF
+    bl _emit_str
+    // call _rt_emit_str: x0=key_ptr, x1=key_len, x2=val_ptr, x3=val_len
+    adrp x0, _fg_emit_str_call@PAGE
+    add x0, x0, _fg_emit_str_call@PAGEOFF
+    bl _emit_str
+    b _pemit_nl
+
+_pemit_nl:
+    bl _skip_nl
+    mov x0, #0
+    b _pemit_ret
+_pemit_err:
+    mov x0, #-1
+_pemit_ret:
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// ────────────────────────────────────────
+// v0.5: _parse_close - close(fd)
+// ────────────────────────────────────────
+_parse_close:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+
+    bl _tok_advance              // skip "close"
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pcl_err
+    bl _parse_expr               // fd in x0
+    cmp x0, #0
+    b.lt _pcl_err
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pcl_err
+    adrp x0, _pclose_call@PAGE
+    add x0, x0, _pclose_call@PAGEOFF
+    bl _emit_str
+    bl _skip_nl
+    mov x0, #0
+    ldp x29, x30, [sp], #16
+    ret
+_pcl_err:
+    mov x0, #-1
+    ldp x29, x30, [sp], #16
+    ret
+
+// ────────────────────────────────────────
+// v0.5: _parse_write_line - write_line fd value
+// ────────────────────────────────────────
+_parse_write_line:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    stp x19, x20, [sp, #-16]!
+
+    bl _tok_advance              // skip "write_line"
+
+    // parse fd expression
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pwl_err
+    // push fd
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+
+    // check if string literal or expression
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.eq _pwl_str
+
+    // integer expression
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pwl_err
+    // itoa
+    adrp x0, _fg_itoa_call@PAGE
+    add x0, x0, _fg_itoa_call@PAGEOFF
+    bl _emit_str
+    // now x1=itoa_buf, x2=len from itoa_call
+    // pop fd into x0
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _pe_mov_x0_x1@PAGE
+    add x0, x0, _pe_mov_x0_x1@PAGEOFF
+    bl _emit_str
+    // x0=fd, x1=itoa_buf, x2=len — call write_line
+    adrp x0, _fg_writeline_call@PAGE
+    add x0, x0, _fg_writeline_call@PAGEOFF
+    bl _emit_str
+    b _pwl_nl
+
+_pwl_str:
+    bl _tok_current
+    ldr x19, [x0, #8]
+    ldr w20, [x0, #4]
+    bl _tok_advance
+    mov x0, x19
+    mov x1, x20
+    bl _reg_string
+    mov x19, x0                 // string index
+    // emit str write to fd
+    bl _emit_str_write           // writes to stdout buffer — but we need fd
+    // Actually for write_line we need to write to the fd, not stdout
+    // Pop fd, load string addr+len, call _rt_write_line
+    // Let me redo: pop fd into x0
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _pe_mov_x0_x1@PAGE
+    add x0, x0, _pe_mov_x0_x1@PAGEOFF
+    bl _emit_str
+    // load string addr into x1
+    adrp x0, _fg_wr_adrp@PAGE
+    add x0, x0, _fg_wr_adrp@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_wr_add@PAGE
+    add x0, x0, _fg_wr_add@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // compute byte len
+    adrp x1, _str_ptrs@PAGE
+    add x1, x1, _str_ptrs@PAGEOFF
+    ldr x1, [x1, x19, lsl #3]
+    adrp x2, _str_lens@PAGE
+    add x2, x2, _str_lens@PAGEOFF
+    ldr w2, [x2, x19, lsl #2]
+    mov x3, #0
+    mov x4, #0
+41: cmp w3, w2
+    b.ge 42f
+    ldrb w5, [x1, x3]
+    cmp w5, #'\\'
+    b.ne 43f
+    add x3, x3, #1
+43: add x3, x3, #1
+    add x4, x4, #1
+    b 41b
+42: adrp x0, _fg_wr_len@PAGE
+    add x0, x0, _fg_wr_len@PAGEOFF
+    bl _emit_str
+    mov x0, x4
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    // call _rt_write_line
+    adrp x0, _fg_writeline_call@PAGE
+    add x0, x0, _fg_writeline_call@PAGEOFF
+    bl _emit_str
+    b _pwl_nl
+
+_pwl_nl:
+    bl _skip_nl
+    mov x0, #0
+    b _pwl_ret
+_pwl_err:
+    mov x0, #-1
+_pwl_ret:
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// ────────────────────────────────────────
+// v0.5: _parse_send - send pipe "key" value
+// ────────────────────────────────────────
+_parse_send:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+
+    bl _tok_advance              // skip "send"
+
+    // get pipe variable
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _psnd_err
+    bl _tok_current
+    ldr x19, [x0, #8]
+    ldr w20, [x0, #4]
+    bl _tok_advance
+    // lookup pipe var — write_fd is at offset+8
+    mov x0, x19
+    mov x1, x20
+    bl _sym_lookup
+    cbz x0, _psnd_err
+    mov x21, x0                 // entry ptr
+    // load write_fd (offset+8) into x0 and push
+    ldr w0, [x21, #16]
+    add w0, w0, #8
+    bl _emit_load_var
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+
+    // get key string
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.ne _psnd_err
+    bl _tok_current
+    ldr x19, [x0, #8]
+    ldr w20, [x0, #4]
+    bl _tok_advance
+    mov x0, x19
+    mov x1, x20
+    bl _reg_string
+    mov x22, x0                 // key string index
+
+    // parse value expression
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _psnd_err
+    // x0 = value — for now treat as integer, convert to string via itoa
+    adrp x0, _fg_itoa_call@PAGE
+    add x0, x0, _fg_itoa_call@PAGEOFF
+    bl _emit_str
+    // now itoa_buf has the value string, x0=len
+    // We need: x0=write_fd, x1=key_ptr, x2=key_len, x3=val_ptr, x4=val_len
+    // push val_len (x0)
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    // load val_ptr (itoa_buf)
+    adrp x0, _fg_inbuf_ptr@PAGE
+    add x0, x0, _fg_inbuf_ptr@PAGEOFF
+    bl _emit_str
+    // Actually itoa_buf, not input_buf
+    // emit: adrp x3, _itoa_buf@PAGE / add x3, x3, _itoa_buf@PAGEOFF
+    adrp x0, _psnd_itoa_ptr@PAGE
+    add x0, x0, _psnd_itoa_ptr@PAGEOFF
+    bl _emit_str
+    // pop val_len into x4
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _psnd_mov_x4@PAGE
+    add x0, x0, _psnd_mov_x4@PAGEOFF
+    bl _emit_str
+    // load key_ptr into x1
+    adrp x0, _fg_wr_adrp@PAGE
+    add x0, x0, _fg_wr_adrp@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x22
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_wr_add@PAGE
+    add x0, x0, _fg_wr_add@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x22
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // key_len into x2
+    adrp x0, _fg_wr_len@PAGE
+    add x0, x0, _fg_wr_len@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    adrp x0, _pemit_mov_x2@PAGE
+    add x0, x0, _pemit_mov_x2@PAGEOFF
+    bl _emit_str
+    // pop write_fd into x0
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _pe_mov_x0_x1@PAGE
+    add x0, x0, _pe_mov_x0_x1@PAGEOFF
+    bl _emit_str
+    // call _rt_send
+    adrp x0, _fg_send_call@PAGE
+    add x0, x0, _fg_send_call@PAGEOFF
+    bl _emit_str
+    bl _skip_nl
+    mov x0, #0
+    b _psnd_ret
+_psnd_err:
+    mov x0, #-1
+_psnd_ret:
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// ────────────────────────────────────────
+// v0.5: _parse_recv - recv pipe key_var val_var
+// (simplified: reads line from pipe, stores as string)
+// ────────────────────────────────────────
+_parse_recv:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    stp x19, x20, [sp, #-16]!
+
+    bl _tok_advance              // skip "recv"
+
+    // get pipe variable
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _precv_err
+    bl _tok_current
+    ldr x19, [x0, #8]
+    ldr w20, [x0, #4]
+    bl _tok_advance
+    mov x0, x19
+    mov x1, x20
+    bl _sym_lookup
+    cbz x0, _precv_err
+    mov x19, x0                 // pipe entry
+    // load read_fd (at offset) into x0
+    ldr w0, [x19, #16]
+    bl _emit_load_var
+    // call _rt_recv: x0=read_fd → x0=val_ptr, x1=val_len
+    adrp x0, _fg_recv_call@PAGE
+    add x0, x0, _fg_recv_call@PAGEOFF
+    bl _emit_str
+
+    // skip key_var and val_var idents (simplified: we don't store them separately)
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _precv_err
+    bl _tok_advance              // skip key_var
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _precv_err
+    bl _tok_advance              // skip val_var
+
+    bl _skip_nl
+    mov x0, #0
+    b _precv_ret
+_precv_err:
+    mov x0, #-1
+_precv_ret:
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
 // ── Local data for parser ──
 .section __DATA,__data
 
 _po_mov_x2:    .asciz "    mov x2, x0\n"
 _pfac_neg_str: .asciz "    neg x0, x0\n"
 _pe_mov_x0_x1: .asciz "    mov x0, x1\n"
+_pt_mov_x1_imm: .asciz "    mov x1, #"
 _pfn_uf:       .asciz "_uf_"
 _pfn_colon_nl: .asciz ":\n"
 _pfn_str_x:    .asciz "    str x"
@@ -2384,3 +3544,22 @@ _pfn_comma_x29: .asciz ", [x29, #-"
 _pfn_bracket_nl: .asciz "]\n"
 _efc_ldr_x:    .asciz "    ldr x"
 _efc_pop_suf:  .asciz ", [sp], #16\n"
+_pfac_mov_x1_x0: .asciz "    mov x1, x0\n"
+_pspawn_fork:  .ascii "    bl _rt_flush\n    mov x16, #2\n    svc #0x80\n    cbnz x1, "
+               .byte 0
+_pspawn_exit:  .ascii "    bl _rt_flush\n    mov x19, #3\n4:  cmp x19, #256\n    b.ge 5f\n    mov x0, x19\n    mov x16, #6\n    svc #0x80\n    add x19, x19, #1\n    b 4b\n5:  mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
+               .byte 0
+_pemit_mov_x2: .asciz "    mov x2, x0\n"
+_psend_mov_x3: .asciz "    mov x3, x0\n"
+_psend_mov_x4: .asciz "    mov x4, x0\n"
+_pclose_call:  .asciz "    bl _rt_close\n"
+_pfac_zero_pop: .asciz "0, [sp], #16\n"
+_pfac_adrp_x2: .asciz "    adrp x2, "
+_pfac_add_x2:  .asciz "    add x2, x2, "
+_pfac_mov_x3:  .asciz "    mov x3, #"
+_psnd_itoa_ptr: .ascii "    adrp x3, _itoa_buf@PAGE\n    add x3, x3, _itoa_buf@PAGEOFF\n"
+                .byte 0
+_psnd_mov_x4:  .asciz "    mov x4, x1\n"
+_pemit_mov_x1_imm: .asciz "    mov x1, #"
+_pemit_push_x1: .asciz "    str x1, [sp, #-16]!\n"
+_pemit_pop_x0:  .asciz "    ldr x0, [sp], #16\n"

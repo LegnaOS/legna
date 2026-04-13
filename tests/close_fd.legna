@@ -1,0 +1,6 @@
+# close test
+
+legna:
+    let fd = open("/tmp/legna_test_close.txt", "w")
+    close(fd)
+    output "ok"

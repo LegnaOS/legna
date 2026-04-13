@@ -1,0 +1,4 @@
+# emit string test
+
+legna:
+    emit "status" "ok"

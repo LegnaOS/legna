@@ -1,0 +1,7 @@
+# spawn and wait test
+
+legna:
+    let pid = spawn:
+        output "child\n"
+    let status = wait(pid)
+    output "done\n"

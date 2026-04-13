@@ -1,0 +1,4 @@
+# emit integer test
+
+legna:
+    emit "count" 42

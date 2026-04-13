@@ -47,7 +47,7 @@ run_error_test() {
     fi
 }
 
-echo "Legna Compiler Test Suite v0.4"
+echo "Legna Compiler Test Suite v0.5"
 echo "=============================="
 echo ""
 
@@ -81,6 +81,16 @@ run_test "recursion" "tests/recursion.legna" "$(printf '3628800')"
 
 # Error tests
 run_error_test "no_file" "nonexistent.legna"
+
+# v0.5 features: AI-native I/O
+run_test "emit_str" "tests/emit_str.legna" "$(printf '{"status":"ok"}')"
+run_test "emit_int" "tests/emit_int.legna" "$(printf '{"count":42}')"
+
+# v0.5 features: File I/O
+run_test "close_fd" "tests/close_fd.legna" "$(printf 'ok')"
+
+# v0.5 features: Concurrency
+run_test "spawn_wait" "tests/spawn_wait.legna" "$(printf 'child\ndone')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"
