@@ -1,0 +1,12 @@
+# v0.7 数组基本读写测试
+
+legna:
+    let arr = array(3)
+    arr[0] = 10
+    arr[1] = 20
+    arr[2] = 30
+    output arr[0]
+    output " "
+    output arr[1]
+    output " "
+    output arr[2]

@@ -31,6 +31,8 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_fn, _kw_return
 .globl _kw_spawn, _kw_wait, _kw_pipe, _kw_send, _kw_recv
 .globl _kw_emit, _kw_open, _kw_close, _kw_read_line, _kw_write_line
+.globl _kw_array
+.globl _kw_len, _kw_char_at, _kw_to_str, _kw_to_num
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -59,6 +61,11 @@ _kw_open:      .asciz "open"
 _kw_close:     .asciz "close"
 _kw_read_line: .asciz "read_line"
 _kw_write_line:.asciz "write_line"
+_kw_array:     .asciz "array"
+_kw_len:       .asciz "len"
+_kw_char_at:   .asciz "char_at"
+_kw_to_str:    .asciz "to_str"
+_kw_to_num:    .asciz "to_num"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -101,6 +108,11 @@ _lnk_x:        .asciz "-x"
 .globl _fg_open_r_call, _fg_open_w_call, _fg_close_call
 .globl _fg_readline_fd, _fg_writeline_call
 .globl _fg_mov_x0_fd, _fg_str_x1, _fg_ldr_x1
+.globl _fg_movz, _fg_movk, _fg_lsl16, _fg_lsl32, _fg_lsl48, _fg_neg_x0
+.globl _fg_lsl3, _fg_add_x1_x0, _fg_neg_x1, _fg_ldr_x29_x1, _fg_str_x29_x1
+.globl _fg_mov_x2_x0, _fg_mov_x1_imm, _fg_pop_x1
+.globl _pa_lsl_x1_3, _pa_add_x1_x0
+.globl _fg_ldrb
 
 _fg_hdr:       .ascii ".global _main\n.align 2\n\n"
                .byte 0
@@ -205,6 +217,27 @@ _fg_writeline_call: .asciz "    bl _rt_write_line\n"
 _fg_mov_x0_fd:  .asciz "    mov x0, x"
 _fg_str_x1:     .asciz "    str x1, [x29, #-"
 _fg_ldr_x1:     .asciz "    ldr x1, [x29, #-"
+
+// v0.7: Large immediate support (movz/movk)
+_fg_movz:       .asciz "    movz x0, #"
+_fg_movk:       .asciz "    movk x0, #"
+_fg_lsl16:      .asciz ", lsl #16\n"
+_fg_lsl32:      .asciz ", lsl #32\n"
+_fg_lsl48:      .asciz ", lsl #48\n"
+_fg_neg_x0:     .asciz "    neg x0, x0\n"
+
+// v0.7: Array support fragments
+_fg_lsl3:       .asciz "    lsl x0, x0, #3\n"
+_fg_add_x1_x0:  .asciz "    add x1, x1, x0\n"
+_fg_neg_x1:     .asciz "    neg x1, x1\n"
+_fg_ldr_x29_x1: .asciz "    ldr x0, [x29, x1]\n"
+_fg_str_x29_x1: .asciz "    str x2, [x29, x1]\n"
+_fg_mov_x2_x0:  .asciz "    mov x2, x0\n"
+_fg_mov_x1_imm: .asciz "    mov x1, #"
+_fg_pop_x1:     .asciz "    ldr x1, [sp], #16\n"
+_pa_lsl_x1_3:   .asciz "    lsl x1, x1, #3\n"
+_pa_add_x1_x0:  .asciz "    add x1, x1, x0\n"
+_fg_ldrb:       .asciz "    ldrb w0, [x0, x1]\n"
 
 // ── BSS Section ──
 .section __DATA,__bss

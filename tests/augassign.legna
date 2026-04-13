@@ -1,0 +1,12 @@
+# v0.7 增强赋值测试
+
+legna:
+    let x = 10
+    x += 5
+    output x
+    output "\n"
+    x -= 3
+    output x
+    output "\n"
+    x *= 2
+    output x

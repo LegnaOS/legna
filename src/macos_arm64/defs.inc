@@ -84,7 +84,24 @@
 .equ TOK_KW_RDLINE, 50
 .equ TOK_KW_WRLINE, 51
 
+// v0.7: Augmented assignment
+.equ TOK_PLUS_EQ,   52
+.equ TOK_MINUS_EQ,  53
+.equ TOK_STAR_EQ,   54
+
+// v0.7: Arrays
+.equ TOK_KW_ARRAY,  55
+.equ TOK_LBRACKET,  56
+.equ TOK_RBRACKET,  57
+
+// v0.7: String builtins
+.equ TOK_KW_LEN,    58
+.equ TOK_KW_CHARAT, 59
+.equ TOK_KW_TOSTR,  60
+.equ TOK_KW_TONUM,  61
+
 // Symbol types
 .equ TY_INT,        0
 .equ TY_STR,        1
 .equ TY_PIPE,       2
+.equ TY_ARR,        3

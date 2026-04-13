@@ -34,8 +34,11 @@ statement    = let_stmt
              | NEWLINE ;
 
 let_stmt     = "let" IDENT "=" expression NEWLINE
+             | "let" IDENT "=" "array" "(" INTEGER ")" NEWLINE
              | "let" IDENT "=" spawn_expr ;
-assign_stmt  = IDENT "=" expression NEWLINE ;
+assign_stmt  = IDENT "=" expression NEWLINE
+             | IDENT ( "+=" | "-=" | "*=" ) expression NEWLINE
+             | IDENT "[" expression "]" "=" expression NEWLINE ;
 output_stmt  = "output" ( expression | STRING ) NEWLINE ;
 emit_stmt    = "emit" STRING expression NEWLINE ;
 send_stmt    = "send" IDENT STRING expression NEWLINE ;
@@ -74,8 +77,12 @@ factor       = INTEGER
              | STRING
              | IDENT
              | IDENT "(" [ arg_list ] ")"
+             | IDENT "[" expression "]"
              | "input_num" "(" ")"
              | "input_str" "(" ")"
+             | "len" "(" IDENT ")"
+             | "char_at" "(" IDENT "," expression ")"
+             | "to_num" "(" IDENT ")"
              | "pipe" "(" ")"
              | "open" "(" STRING "," STRING ")"
              | "read_line" "(" expression ")"

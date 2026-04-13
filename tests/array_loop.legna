@@ -1,0 +1,10 @@
+# v0.7 数组循环测试：填充 + 求和
+
+legna:
+    let arr = array(5)
+    for i in 0..5:
+        arr[i] = i * i
+    let sum = 0
+    for i in 0..5:
+        sum += arr[i]
+    output sum

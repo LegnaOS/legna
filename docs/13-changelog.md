@@ -4,7 +4,16 @@
 
 ---
 
-## v0.6（当前版本）
+## v0.7（当前版本）
+
+- 大立即数支持：`movz`/`movk` 指令序列，突破 65535 限制，支持完整 64 位整数
+- 增强赋值运算符：`+=` `-=` `*=` 语法糖
+- 固定大小数组：`let arr = array(N)`，支持 `arr[i]` 读写和动态索引
+- 字符串内建函数：`len(s)`、`char_at(s, i)`、`to_num(s)`
+- 新增测试 8 个（bignum、augassign、array、array_loop、strlen、charat、tonum、bubblesort）
+- 综合验证：用数组实现冒泡排序，33/33 测试全部通过
+
+## v0.6
 
 - 窥孔优化：`_out_pos` 回退技术消除冗余 push/pop 指令
 - 立即数路径死代码消除（擦除无用 `mov`，`pop` 直接到 x0）

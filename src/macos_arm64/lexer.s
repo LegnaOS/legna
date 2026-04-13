@@ -247,8 +247,30 @@ _op_rparen:
 
 _op_comma:
     cmp w0, #','
-    b.ne _op_plus
+    b.ne _op_lbracket
     mov w0, #TOK_COMMA
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+
+_op_lbracket:
+    cmp w0, #'['
+    b.ne _op_rbracket
+    mov w0, #TOK_LBRACKET
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+
+_op_rbracket:
+    cmp w0, #']'
+    b.ne _op_plus
+    mov w0, #TOK_RBRACKET
     mov x1, #1
     add x2, x19, x20
     mov x3, #0
@@ -259,6 +281,21 @@ _op_comma:
 _op_plus:
     cmp w0, #'+'
     b.ne _op_minus
+    // peek next char for +=
+    add x1, x20, #1
+    cmp x1, x21
+    b.ge _op_plus_single
+    ldrb w1, [x19, x1]
+    cmp w1, #'='
+    b.ne _op_plus_single
+    mov w0, #TOK_PLUS_EQ
+    mov x1, #2
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #2
+    b _lex_loop
+_op_plus_single:
     mov w0, #TOK_PLUS
     mov x1, #1
     add x2, x19, x20
@@ -270,6 +307,21 @@ _op_plus:
 _op_minus:
     cmp w0, #'-'
     b.ne _op_star
+    // peek next char for -=
+    add x1, x20, #1
+    cmp x1, x21
+    b.ge _op_minus_single
+    ldrb w1, [x19, x1]
+    cmp w1, #'='
+    b.ne _op_minus_single
+    mov w0, #TOK_MINUS_EQ
+    mov x1, #2
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #2
+    b _lex_loop
+_op_minus_single:
     mov w0, #TOK_MINUS
     mov x1, #1
     add x2, x19, x20
@@ -281,6 +333,21 @@ _op_minus:
 _op_star:
     cmp w0, #'*'
     b.ne _op_slash
+    // peek next char for *=
+    add x1, x20, #1
+    cmp x1, x21
+    b.ge _op_star_single
+    ldrb w1, [x19, x1]
+    cmp w1, #'='
+    b.ne _op_star_single
+    mov w0, #TOK_STAR_EQ
+    mov x1, #2
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #2
+    b _lex_loop
+_op_star_single:
     mov w0, #TOK_STAR
     mov x1, #1
     add x2, x19, x20
@@ -900,13 +967,68 @@ _mk_try_rdline:
 _mk_try_wrline:
     // "write_line" (10)
     cmp x20, #10
-    b.ne _mk_ident
+    b.ne _mk_try_array
     mov x0, x19
     adrp x1, _kw_write_line@PAGE
     add x1, x1, _kw_write_line@PAGEOFF
     mov x2, #10
     bl _strncmp
     cbz x0, _mk_wrline
+
+_mk_try_array:
+    // "array" (5)
+    cmp x20, #5
+    b.ne _mk_try_len
+    mov x0, x19
+    adrp x1, _kw_array@PAGE
+    add x1, x1, _kw_array@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_array
+
+_mk_try_len:
+    // "len" (3)
+    cmp x20, #3
+    b.ne _mk_try_char_at
+    mov x0, x19
+    adrp x1, _kw_len@PAGE
+    add x1, x1, _kw_len@PAGEOFF
+    mov x2, #3
+    bl _strncmp
+    cbz x0, _mk_len
+
+_mk_try_char_at:
+    // "char_at" (7)
+    cmp x20, #7
+    b.ne _mk_try_to_str
+    mov x0, x19
+    adrp x1, _kw_char_at@PAGE
+    add x1, x1, _kw_char_at@PAGEOFF
+    mov x2, #7
+    bl _strncmp
+    cbz x0, _mk_char_at
+
+_mk_try_to_str:
+    // "to_str" (6)
+    cmp x20, #6
+    b.ne _mk_try_to_num
+    mov x0, x19
+    adrp x1, _kw_to_str@PAGE
+    add x1, x1, _kw_to_str@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_to_str
+
+_mk_try_to_num:
+    // "to_num" (6)
+    cmp x20, #6
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_to_num@PAGE
+    add x1, x1, _kw_to_num@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_to_num
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -994,6 +1116,21 @@ _mk_rdline:
     b _mk_ret
 _mk_wrline:
     mov w0, #TOK_KW_WRLINE
+    b _mk_ret
+_mk_array:
+    mov w0, #TOK_KW_ARRAY
+    b _mk_ret
+_mk_len:
+    mov w0, #TOK_KW_LEN
+    b _mk_ret
+_mk_char_at:
+    mov w0, #TOK_KW_CHARAT
+    b _mk_ret
+_mk_to_str:
+    mov w0, #TOK_KW_TOSTR
+    b _mk_ret
+_mk_to_num:
+    mov w0, #TOK_KW_TONUM
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

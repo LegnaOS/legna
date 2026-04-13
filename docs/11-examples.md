@@ -104,7 +104,31 @@ legna:
 {"status":"ok"}
 ```
 
-## 11.6 并发 Worker
+## 11.6 冒泡排序（数组）
+
+```legna
+legna:
+    let arr = array(5)
+    arr[0] = 5
+    arr[1] = 3
+    arr[2] = 8
+    arr[3] = 1
+    arr[4] = 4
+    for i in 0..4:
+        for j in 0..4:
+            if arr[j] > arr[j + 1]:
+                let tmp = arr[j]
+                arr[j] = arr[j + 1]
+                arr[j + 1] = tmp
+    for i in 0..5:
+        output arr[i]
+        if i < 4:
+            output " "
+```
+
+输出：`1 3 4 5 8`
+
+## 11.7 并发 Worker
 
 多个子进程并行工作，通过管道汇报结果：
 

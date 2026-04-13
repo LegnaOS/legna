@@ -9,6 +9,7 @@ A minimalist programming language. The compiler is written in pure ARM64 assembl
 - Pure ARM64 assembly compiler — no libc, no runtime, just syscalls
 - Single-pass compilation: source → lexer → parser+codegen → native binary
 - Faster than C -O0 on recursive workloads (fib(35): 27% faster)
+- Arrays, augmented assignment (`+=` `-=` `*=`), string builtins
 - AI-native structured output (JSON Lines via `emit`)
 - Multiprocess concurrency with `spawn`/`wait` and pipe IPC
 
@@ -68,6 +69,19 @@ legna:
     output "done\n"
 ```
 
+```legna
+# arrays and augmented assignment
+legna:
+    let arr = array(5)
+    for i in 0..5:
+        arr[i] = i * i
+    let sum = 0
+    for i in 0..5:
+        sum += arr[i]
+    output sum
+    output "\n"
+```
+
 ## Performance
 
 fib(35) recursive benchmark, 20 iterations, Apple Silicon:
@@ -87,13 +101,16 @@ Legna generates code that beats `gcc -O0` through peephole optimizations — `_o
 | Entry block | `legna:` |
 | Output | `output expr` |
 | Variables | `let x = expr` |
+| Arrays | `let arr = array(N)`, `arr[i]` |
 | Arithmetic | `+` `-` `*` `/` `%` |
+| Augmented assign | `+=` `-=` `*=` |
 | Comparison | `==` `!=` `<` `>` `<=` `>=` |
 | Boolean | `and` `or` `not` (short-circuit) |
 | Control flow | `if`/`elif`/`else`, `while`, `for x in a..b:` |
 | Loop control | `break`, `continue` |
 | Functions | `fn name(params):` with recursion |
 | Input | `input_num()`, `input_str()` |
+| String builtins | `len(s)`, `char_at(s,i)`, `to_num(s)` |
 | Structured I/O | `emit "key" value` (JSON Lines) |
 | File I/O | `open`/`close`/`read_line`/`write_line` |
 | Concurrency | `spawn:`/`wait()`, `pipe()`/`send`/`recv` |
@@ -106,7 +123,7 @@ Legna generates code that beats `gcc -O0` through peephole optimizations — `_o
 legna/
 ├── src/macos_arm64/     # compiler source (modular ARM64 assembly)
 ├── docs/                # language manual (multi-file book)
-├── tests/               # automated test suite (25 tests)
+├── tests/               # automated test suite (33 tests)
 ├── helloworld.legna     # hello world example
 └── Makefile             # build system
 ```
@@ -126,7 +143,7 @@ Full language manual: [docs/README.md](docs/README.md)
 ## Tests
 
 ```bash
-make test    # 25/25 tests
+make test    # 33/33 tests
 ```
 
 ## License

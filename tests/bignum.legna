@@ -1,0 +1,11 @@
+# v0.7 大立即数测试
+
+legna:
+    let x = 100000
+    output x
+    output "\n"
+    let y = x + 1
+    output y
+    output "\n"
+    let z = 1000000
+    output z

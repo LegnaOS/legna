@@ -47,7 +47,7 @@ run_error_test() {
     fi
 }
 
-echo "Legna Compiler Test Suite v0.5"
+echo "Legna Compiler Test Suite v0.7"
 echo "=============================="
 echo ""
 
@@ -91,6 +91,22 @@ run_test "close_fd" "tests/close_fd.legna" "$(printf 'ok')"
 
 # v0.5 features: Concurrency
 run_test "spawn_wait" "tests/spawn_wait.legna" "$(printf 'child\ndone')"
+
+# v0.7 features: Large immediates
+run_test "bignum" "tests/bignum.legna" "$(printf '100000\n100001\n1000000')"
+
+# v0.7 features: Augmented assignment
+run_test "augassign" "tests/augassign.legna" "$(printf '15\n12\n24')"
+
+# v0.7 features: Arrays
+run_test "array" "tests/array.legna" "$(printf '10 20 30')"
+run_test "array_loop" "tests/array_loop.legna" "$(printf '30')"
+
+# v0.7 features: String builtins
+run_test "strlen" "tests/strlen.legna" "$(printf '5')"
+run_test "charat" "tests/charat.legna" "$(printf '104 111')"
+run_test "tonum" "tests/tonum.legna" "$(printf '123')"
+run_test "bubblesort" "tests/bubblesort.legna" "$(printf '1 3 4 5 8')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"

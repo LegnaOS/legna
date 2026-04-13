@@ -1,0 +1,9 @@
+# v0.7 char_at 测试
+
+legna:
+    let s = "hello"
+    let c = char_at(s, 0)
+    output c
+    output " "
+    let d = char_at(s, 4)
+    output d

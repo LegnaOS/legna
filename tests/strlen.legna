@@ -1,0 +1,6 @@
+# v0.7 字符串长度测试
+
+legna:
+    let s = "hello"
+    let n = len(s)
+    output n
