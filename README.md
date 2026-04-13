@@ -1,92 +1,134 @@
 # Legna
 
-一门极简编程语言，编译器用纯 ARM64 汇编编写，零 C 依赖。
+A minimalist programming language. The compiler is written in pure ARM64 assembly — zero C dependencies, compiles directly to native machine code.
 
-## 快速开始
+> [中文版](README_CN.md)
+
+## Highlights
+
+- Pure ARM64 assembly compiler — no libc, no runtime, just syscalls
+- Single-pass compilation: source → lexer → parser+codegen → native binary
+- Faster than C -O0 on recursive workloads (fib(35): 27% faster)
+- AI-native structured output (JSON Lines via `emit`)
+- Multiprocess concurrency with `spawn`/`wait` and pipe IPC
+
+## Quick Start
 
 ```bash
-# 构建编译器
-make
+make                              # build the compiler
+./legnac hello.legna -o hello     # compile
+./hello                           # run
+```
 
-# 编写你的第一个程序
-cat > hello.legna << 'EOF'
-# hello world
-
+```legna
 legna:
     output "hello, world\n"
-EOF
-
-# 编译并运行
-./legnac hello.legna -o hello
-./hello
 ```
 
-## 语法示例
+## A Taste of Legna
 
 ```legna
-# Legna 使用极简语法：缩进敏感，无分号，无花括号
+fn fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
 
 legna:
-    output "name:\tLegna\n"
-    output "path: C:\\legna\n"
-    output "say \"hello\"\n"
+    output fib(35)
+    output "\n"
 ```
 
 ```legna
-# AI 原生结构化输出（JSON Lines）
-
+# AI-native structured output (JSON Lines)
 legna:
+    let fd = open("data.txt", "r")
+    let count = 0
+    let line = read_line(fd)
+    while line != "":
+        count = count + 1
+        line = read_line(fd)
+    close(fd)
+    emit "lines" count
     emit "status" "ok"
-    emit "count" 42
 ```
 
-## 项目结构
+Output:
+
+```json
+{"lines":42}
+{"status":"ok"}
+```
+
+```legna
+# multiprocess concurrency
+legna:
+    let pid = spawn:
+        output "child\n"
+    wait(pid)
+    output "done\n"
+```
+
+## Performance
+
+fib(35) recursive benchmark, 20 iterations, Apple Silicon:
+
+| Compiler | CPU Cycles | vs Legna |
+|----------|-----------|----------|
+| **Legna v0.6** | **2,313M** | baseline |
+| C (clang -O0) | 3,165M | 1.37x slower |
+| C (clang -O2) | ~90M | ~25x faster |
+
+Legna generates code that beats `gcc -O0` through peephole optimizations — `_out_pos` rewind eliminates redundant push/pop pairs in a single-pass compiler with no IR.
+
+## Language Features
+
+| Feature | Syntax |
+|---------|--------|
+| Entry block | `legna:` |
+| Output | `output expr` |
+| Variables | `let x = expr` |
+| Arithmetic | `+` `-` `*` `/` `%` |
+| Comparison | `==` `!=` `<` `>` `<=` `>=` |
+| Boolean | `and` `or` `not` (short-circuit) |
+| Control flow | `if`/`elif`/`else`, `while`, `for x in a..b:` |
+| Loop control | `break`, `continue` |
+| Functions | `fn name(params):` with recursion |
+| Input | `input_num()`, `input_str()` |
+| Structured I/O | `emit "key" value` (JSON Lines) |
+| File I/O | `open`/`close`/`read_line`/`write_line` |
+| Concurrency | `spawn:`/`wait()`, `pipe()`/`send`/`recv` |
+| Comments | `# single line` |
+| Indentation | 4 spaces or tab |
+
+## Project Structure
 
 ```
 legna/
-├── src/macos_arm64/            # 编译器源码（模块化纯 ARM64 汇编）
-├── docs/                       # 语言手册（多文件书籍结构）
-│   ├── README.md               # 目录
-│   ├── 01-introduction.md      # 前言与设计哲学
-│   ├── 02-quickstart.md        # 快速入门
-│   ├── 03-lexical.md           # 词法结构
-│   ├── 04-types.md             # 类型系统
-│   ├── 05-variables.md         # 变量与赋值
-│   ├── 06-expressions.md       # 表达式
-│   ├── 07-control-flow.md      # 控制流
-│   ├── 08-functions.md         # 函数
-│   ├── 09-io.md                # 输入输出
-│   ├── 10-compiler.md          # 编译器架构
-│   ├── 11-examples.md          # 完整示例
-│   ├── 12-errors.md            # 错误信息参考
-│   ├── 13-changelog.md         # 版本历史
-│   ├── 14-grammar.md           # EBNF 文法
-│   ├── 15-concurrency.md       # 多进程并发
-│   └── 16-ai-native.md         # AI 原生设计
-├── tests/                      # 自动化测试
-├── helloworld.legna            # Hello World 示例
-├── Makefile                    # 构建系统
-└── .gitignore
+├── src/macos_arm64/     # compiler source (modular ARM64 assembly)
+├── docs/                # language manual (multi-file book)
+├── tests/               # automated test suite (25 tests)
+├── helloworld.legna     # hello world example
+└── Makefile             # build system
 ```
 
-## 平台支持
+## Platform Support
 
-| 平台 | 架构 | 状态 |
-|------|------|------|
-| macOS | ARM64 (Apple Silicon) | 已实现 |
-| Linux | x86_64 | 计划中 |
-| Windows | x86_64 | 计划中 |
+| Platform | Architecture | Status |
+|----------|-------------|--------|
+| macOS | ARM64 (Apple Silicon) | **Supported** |
+| Linux | ARM64 / x86_64 | Planned |
+| Windows | x86_64 | Planned |
 
-## 文档
+## Documentation
 
-完整语言手册见 [docs/README.md](docs/README.md)
+Full language manual: [docs/README.md](docs/README.md)
 
-## 测试
+## Tests
 
 ```bash
-make test
+make test    # 25/25 tests
 ```
 
-## 许可证
+## License
 
 MIT
