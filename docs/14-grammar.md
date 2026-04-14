@@ -5,7 +5,9 @@
 ---
 
 ```ebnf
-program      = { fn_def } entry_block ;
+program      = { import_stmt } { fn_def } entry_block ;
+
+import_stmt  = "import" STRING NEWLINE ;
 
 fn_def       = "fn" IDENT "(" [ param_list ] ")" ":" NEWLINE
                INDENT { statement } DEDENT ;

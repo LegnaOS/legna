@@ -1,0 +1,9 @@
+import "math"
+import "string"
+
+legna:
+    output abs(-5)
+    output "\n"
+    output is_alpha(65)
+    output "\n"
+    output pow(3, 3)

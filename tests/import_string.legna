@@ -1,0 +1,10 @@
+import "string"
+
+legna:
+    output is_alpha(65)
+    output "\n"
+    output is_digit(48)
+    output "\n"
+    output to_upper(97)
+    output "\n"
+    output to_lower(72)

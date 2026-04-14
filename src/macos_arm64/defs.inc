@@ -100,6 +100,9 @@
 .equ TOK_KW_TOSTR,  60
 .equ TOK_KW_TONUM,  61
 
+// v0.8: Multi-file compilation
+.equ TOK_KW_IMPORT, 62
+
 // Symbol types
 .equ TY_INT,        0
 .equ TY_STR,        1

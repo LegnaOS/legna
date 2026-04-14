@@ -703,11 +703,88 @@ _parse_program:
     add x0, x0, _fn_patch_count@PAGEOFF
     str wzr, [x0]
 
+    // pre-scan: detect library mode (no legna: block)
+    adrp x0, _is_lib_mode@PAGE
+    add x0, x0, _is_lib_mode@PAGEOFF
+    mov w1, #1
+    str w1, [x0]                     // assume lib mode
+    adrp x1, _tok_count@PAGE
+    add x1, x1, _tok_count@PAGEOFF
+    ldr w1, [x1]
+    adrp x2, _tok_buf@PAGE
+    add x2, x2, _tok_buf@PAGEOFF
+    mov x3, #0                       // use x3 (64-bit) for index
+_pp_scan:
+    cmp x3, x1
+    b.ge _pp_scan_done
+    mov x4, #TOK_SIZE
+    madd x4, x3, x4, x2             // x4 = tok_buf + index * TOK_SIZE
+    ldr w5, [x4]                     // token type
+    cmp w5, #TOK_KW_LEGNA
+    b.ne _pp_scan_next
+    // found legna: → not lib mode
+    adrp x0, _is_lib_mode@PAGE
+    add x0, x0, _is_lib_mode@PAGEOFF
+    str wzr, [x0]
+    b _pp_scan_done
+_pp_scan_next:
+    add x3, x3, #1
+    b _pp_scan
+_pp_scan_done:
+
     // emit header (runtime only, no _main yet)
     bl _emit_header
 
     // skip leading newlines
     bl _skip_nl
+
+    // reset import count
+    adrp x0, _import_count@PAGE
+    add x0, x0, _import_count@PAGEOFF
+    str wzr, [x0]
+
+    // parse import statements before fn definitions
+_pp_import_loop:
+    bl _tok_peek
+    cmp w0, #TOK_KW_IMPORT
+    b.ne _pp_import_done
+    bl _tok_advance              // skip "import"
+    // expect string literal
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.ne _pp_err
+    bl _tok_current
+    ldr x1, [x0, #8]            // string content ptr
+    ldr w2, [x0, #4]            // string len
+    // store in import table — copy name bytes into entry (offset 12..31)
+    adrp x3, _import_count@PAGE
+    add x3, x3, _import_count@PAGEOFF
+    ldr w4, [x3]
+    adrp x5, _import_tab@PAGE
+    add x5, x5, _import_tab@PAGEOFF
+    mov x6, #32
+    mul x6, x4, x6
+    add x5, x5, x6
+    str w2, [x5, #8]            // len
+    // copy name bytes into entry at offset 12
+    add x7, x5, #12
+    mov x8, #0
+_pp_imp_copy:
+    cmp x8, x2
+    b.ge _pp_imp_copy_done
+    ldrb w9, [x1, x8]
+    strb w9, [x7, x8]
+    add x8, x8, #1
+    b _pp_imp_copy
+_pp_imp_copy_done:
+    // store ptr to the copied name (within import_tab entry)
+    str x7, [x5]                // ptr now points into import_tab, not _src_buf
+    add w4, w4, #1
+    str w4, [x3]
+    bl _tok_advance              // skip string
+    bl _skip_nl
+    b _pp_import_loop
+_pp_import_done:
 
     // parse fn definitions before legna:
 _pp_fn_loop:
@@ -720,6 +797,11 @@ _pp_fn_loop:
     bl _skip_nl
     b _pp_fn_loop
 _pp_fn_done:
+
+    // check if this is a library file (no legna: block)
+    bl _tok_peek
+    cmp w0, #TOK_EOF
+    b.eq _pp_lib_mode
 
     // now emit _main prologue (after all fn definitions)
     bl _emit_main_prologue
@@ -755,6 +837,14 @@ _pp_fn_done:
 
     mov x0, #0
     b _pp_ret
+
+_pp_lib_mode:
+    // library file: no legna: block, just fn definitions
+    // emit footer (lib mode skips _main epilogue and bss)
+    bl _emit_footer
+    mov x0, #0
+    b _pp_ret
+
 _pp_err:
     mov x0, #-1
 _pp_ret:
@@ -3180,6 +3270,73 @@ _efc_emit_call:
     b _efc_ret
 
 _efc_undef:
+    // check if imports exist — if so, trust the linker
+    adrp x0, _import_count@PAGE
+    add x0, x0, _import_count@PAGEOFF
+    ldr w0, [x0]
+    cbz w0, _efc_undef_err
+
+    // blind call: parse args without param_count check
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _efc_err
+    mov w22, #0
+_efc_blind_arg_loop:
+    bl _tok_peek
+    cmp w0, #TOK_RPAREN
+    b.eq _efc_blind_args_done
+    cbz w22, _efc_blind_parse_arg
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _efc_err
+_efc_blind_parse_arg:
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _efc_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    add w22, w22, #1
+    b _efc_blind_arg_loop
+_efc_blind_args_done:
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _efc_err
+    // single-arg optimization
+    cmp w22, #1
+    b.ne _efc_blind_multi
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x1, [x0]
+    sub x1, x1, #24
+    str x1, [x0]
+    b _efc_emit_call
+_efc_blind_multi:
+    mov w0, w22
+    sub w0, w0, #1
+_efc_blind_pop:
+    cmp w0, #0
+    b.lt _efc_emit_call
+    stp x0, x1, [sp, #-16]!
+    adrp x0, _efc_ldr_x@PAGE
+    add x0, x0, _efc_ldr_x@PAGEOFF
+    bl _emit_str
+    ldp x0, x1, [sp], #16
+    stp x0, x1, [sp, #-16]!
+    mov x1, x0
+    mov x0, x1
+    bl _emit_num
+    adrp x0, _efc_pop_suf@PAGE
+    add x0, x0, _efc_pop_suf@PAGEOFF
+    bl _emit_str
+    ldp x0, x1, [sp], #16
+    sub w0, w0, #1
+    b _efc_blind_pop
+
+_efc_undef_err:
     bl _tok_line
     mov x1, x0
     adrp x0, _err_undef@PAGE
@@ -3283,6 +3440,16 @@ _pfn_param_done:
     b.lt _pfn_err
 
     // emit function label: _uf_<name>\n
+    // emit .globl _uf_<name> for cross-file linking
+    adrp x0, _fg_globl_uf@PAGE
+    add x0, x0, _fg_globl_uf@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    mov x1, x20
+    bl _emit_raw
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
     adrp x0, _pfn_uf@PAGE
     add x0, x0, _pfn_uf@PAGEOFF
     bl _emit_str

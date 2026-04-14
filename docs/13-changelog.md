@@ -4,7 +4,17 @@
 
 ---
 
-## v0.7（当前版本）
+## v0.8（当前版本）
+
+- 多文件编译：`import "math"` 语法，编译器自动编译库文件并链接
+- 库模式：纯 `fn` 定义文件（无 `legna:` 块）编译为 `.o` 对象文件
+- 标准库：`lib/math.legna`（abs、min、max、clamp、pow）、`lib/string.legna`（str_eq、is_digit、is_alpha、to_upper、to_lower 等）
+- 多文件链接：`_run_ld_multi` 支持链接主文件 + 多个库 `.o`
+- 函数符号导出：所有 `fn` 定义自动 emit `.globl _uf_<name>`
+- 盲调用：有 import 时，未知函数信任链接器解析
+- 新增测试 3 个（import_math、import_string、import_multi），36/36 全部通过
+
+## v0.7
 
 - 大立即数支持：`movz`/`movk` 指令序列，突破 65535 限制，支持完整 64 位整数
 - 增强赋值运算符：`+=` `-=` `*=` 语法糖

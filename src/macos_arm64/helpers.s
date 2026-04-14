@@ -23,6 +23,7 @@ _strlen:
 // _strcpy: x0 = dest, x1 = src (copies including null terminator)
 // ────────────────────────────────────────
 .globl _strcpy
+.globl _rename_file
 _strcpy:
     mov     x2, #0
 1:  ldrb    w3, [x1, x2]
@@ -389,4 +390,12 @@ _emit_raw:
     b       1b
 2:  add     x3, x3, x1
     str     x3, [x2]
+    ret
+
+// ────────────────────────────────────────
+// _rename_file: x0=old_path, x1=new_path → x0=0 ok, -1 err
+// ────────────────────────────────────────
+_rename_file:
+    mov     x16, #128              // SYS_rename
+    svc     #0x80
     ret

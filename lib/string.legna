@@ -1,0 +1,43 @@
+fn str_eq(a, b):
+    let la = len(a)
+    let lb = len(b)
+    if la != lb:
+        return 0
+    for i in 0..la:
+        if char_at(a, i) != char_at(b, i):
+            return 0
+    return 1
+
+fn str_contains(s, c):
+    let n = len(s)
+    for i in 0..n:
+        if char_at(s, i) == c:
+            return 1
+    return 0
+
+fn is_digit(c):
+    if c >= 48:
+        if c <= 57:
+            return 1
+    return 0
+
+fn is_alpha(c):
+    if c >= 65:
+        if c <= 90:
+            return 1
+    if c >= 97:
+        if c <= 122:
+            return 1
+    return 0
+
+fn to_upper(c):
+    if c >= 97:
+        if c <= 122:
+            return c - 32
+    return c
+
+fn to_lower(c):
+    if c >= 65:
+        if c <= 90:
+            return c + 32
+    return c

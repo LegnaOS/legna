@@ -33,6 +33,7 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_emit, _kw_open, _kw_close, _kw_read_line, _kw_write_line
 .globl _kw_array
 .globl _kw_len, _kw_char_at, _kw_to_str, _kw_to_num
+.globl _kw_import
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -66,6 +67,7 @@ _kw_len:       .asciz "len"
 _kw_char_at:   .asciz "char_at"
 _kw_to_str:    .asciz "to_str"
 _kw_to_num:    .asciz "to_num"
+_kw_import:    .asciz "import"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -113,6 +115,8 @@ _lnk_x:        .asciz "-x"
 .globl _fg_mov_x2_x0, _fg_mov_x1_imm, _fg_pop_x1
 .globl _pa_lsl_x1_3, _pa_add_x1_x0
 .globl _fg_ldrb
+.globl _fg_globl_uf, _fg_lib_hdr
+.globl _err_import, _fg_nl_err
 
 _fg_hdr:       .ascii ".global _main\n.align 2\n\n"
                .byte 0
@@ -239,6 +243,12 @@ _pa_lsl_x1_3:   .asciz "    lsl x1, x1, #3\n"
 _pa_add_x1_x0:  .asciz "    add x1, x1, x0\n"
 _fg_ldrb:       .asciz "    ldrb w0, [x0, x1]\n"
 
+// v0.8: Multi-file compilation
+_fg_globl_uf:   .asciz ".globl _uf_"
+_fg_lib_hdr:    .asciz ".text\n.align 2\n"
+_err_import:    .asciz "error: cannot find import file: "
+_fg_nl_err:     .asciz "\n"
+
 // ── BSS Section ──
 .section __DATA,__bss
 
@@ -253,6 +263,9 @@ _fg_ldrb:       .asciz "    ldrb w0, [x0, x1]\n"
 .globl _frame_patch_pos
 .globl _fn_tab, _fn_count
 .globl _fn_frame_patches, _fn_patch_count
+.globl _is_lib_mode
+.globl _import_tab, _import_count
+.globl _lib_o_paths, _lib_o_count, _lib_path_buf, _main_o_path
 .globl _last_is_imm, _last_imm_val, _last_imm_out_pos
 .globl _last_is_var, _last_var_offset, _last_var_out_pos
 
@@ -293,3 +306,10 @@ _fn_tab:      .space 2048        // 32 entries * 64 bytes (name_ptr(8), name_len
 _fn_count:    .space 4
 _fn_frame_patches: .space 256    // 32 entries * 8 bytes (out_pos for frame size patch)
 _fn_patch_count:   .space 4
+_is_lib_mode:      .space 4
+_import_tab:       .space 512       // 16 entries * 32 bytes (ptr(8) + len(4) + padding)
+_import_count:     .space 4
+_lib_o_paths:      .space 4096     // 16 entries * 256 bytes (paths to compiled .o files)
+_lib_o_count:      .space 4
+_lib_path_buf:     .space 256      // temp buffer for building lib file paths
+_main_o_path:      .space 256      // path to main .o file

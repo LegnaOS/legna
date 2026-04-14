@@ -160,6 +160,50 @@ legna:
     wait(w3)
 ```
 
+## 11.8 使用标准库
+
+通过 `import` 导入标准库，使用数学和字符串工具函数：
+
+```legna
+import "math"
+import "string"
+
+fn classify(c):
+    if is_alpha(c):
+        return 1
+    if is_digit(c):
+        return 2
+    return 0
+
+legna:
+    output abs(-42)
+    output "\n"
+    output pow(2, 10)
+    output "\n"
+    output max(3, 7)
+    output "\n"
+    output classify(65)
+    output "\n"
+    output classify(48)
+```
+
+输出：
+
+```
+42
+1024
+7
+1
+2
+```
+
+标准库位于 `lib/` 目录：
+
+| 库 | 函数 |
+|---|---|
+| `math` | `abs(x)`, `min(a,b)`, `max(a,b)`, `clamp(x,lo,hi)`, `pow(base,exp)` |
+| `string` | `str_eq(a,b)`, `str_contains(s,c)`, `is_digit(c)`, `is_alpha(c)`, `to_upper(c)`, `to_lower(c)` |
+
 ---
 
 > [← 编译器架构](10-compiler.md) | [返回目录](README.md) | [错误信息参考 →](12-errors.md)

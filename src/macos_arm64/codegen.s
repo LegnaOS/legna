@@ -103,15 +103,29 @@ _emit_header:
     add x0, x0, _out_pos@PAGEOFF
     str xzr, [x0]
 
+    // check lib mode
+    adrp x0, _is_lib_mode@PAGE
+    add x0, x0, _is_lib_mode@PAGEOFF
+    ldr w0, [x0]
+    cbnz w0, _eh_lib
+
+    // normal mode: full header with runtime
     adrp x0, _fg_hdr@PAGE
     add x0, x0, _fg_hdr@PAGEOFF
     bl _emit_str
     adrp x0, _fg_text@PAGE
     add x0, x0, _fg_text@PAGEOFF
     bl _emit_str
-
     bl _emit_runtime
+    b _eh_ret
 
+_eh_lib:
+    // lib mode: minimal header, no runtime
+    adrp x0, _fg_lib_hdr@PAGE
+    add x0, x0, _fg_lib_hdr@PAGEOFF
+    bl _emit_str
+
+_eh_ret:
     ldp x29, x30, [sp], #16
     ret
 
@@ -145,6 +159,7 @@ _emit_main_prologue:
 // _emit_footer - Emit _main epilogue + .data + .bss
 // ────────────────────────────────────────
 .globl _emit_footer
+.globl _emit_lib_footer
 _emit_footer:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
@@ -152,6 +167,12 @@ _emit_footer:
     stp x21, x22, [sp, #-16]!
     stp x23, x24, [sp, #-16]!
     stp x25, x26, [sp, #-16]!
+
+    // check lib mode — skip _main epilogue + frame patch + bss
+    adrp x0, _is_lib_mode@PAGE
+    add x0, x0, _is_lib_mode@PAGEOFF
+    ldr w0, [x0]
+    cbnz w0, _ef_str_section
 
     // exit code
     adrp x0, _fg_exit@PAGE
@@ -197,6 +218,7 @@ _emit_footer:
     b 2b
 3:
 
+_ef_str_section:
     // .data section with string literals
     adrp x0, _fg_data@PAGE
     add x0, x0, _fg_data@PAGEOFF
@@ -281,11 +303,18 @@ _ef_byte_done:
     b _ef_str_loop
 
 _ef_str_done:
+    // check lib mode — skip bss in lib mode
+    adrp x0, _is_lib_mode@PAGE
+    add x0, x0, _is_lib_mode@PAGEOFF
+    ldr w0, [x0]
+    cbnz w0, _ef_done
+
     // .bss section
     adrp x0, _fg_bss@PAGE
     add x0, x0, _fg_bss@PAGEOFF
     bl _emit_str
 
+_ef_done:
     ldp x25, x26, [sp], #16
     ldp x23, x24, [sp], #16
     ldp x21, x22, [sp], #16

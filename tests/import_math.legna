@@ -1,0 +1,12 @@
+import "math"
+
+legna:
+    output abs(-42)
+    output "\n"
+    output max(3, 7)
+    output "\n"
+    output min(3, 7)
+    output "\n"
+    output pow(2, 10)
+    output "\n"
+    output clamp(15, 0, 10)

@@ -1022,13 +1022,24 @@ _mk_try_to_str:
 _mk_try_to_num:
     // "to_num" (6)
     cmp x20, #6
-    b.ne _mk_ident
+    b.ne _mk_try_import
     mov x0, x19
     adrp x1, _kw_to_num@PAGE
     add x1, x1, _kw_to_num@PAGEOFF
     mov x2, #6
     bl _strncmp
     cbz x0, _mk_to_num
+
+_mk_try_import:
+    // "import" (6)
+    cmp x20, #6
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_import@PAGE
+    add x1, x1, _kw_import@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_import
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -1131,6 +1142,9 @@ _mk_to_str:
     b _mk_ret
 _mk_to_num:
     mov w0, #TOK_KW_TONUM
+    b _mk_ret
+_mk_import:
+    mov w0, #TOK_KW_IMPORT
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

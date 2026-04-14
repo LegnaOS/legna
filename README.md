@@ -9,6 +9,7 @@ A minimalist programming language. The compiler is written in pure ARM64 assembl
 - Pure ARM64 assembly compiler — no libc, no runtime, just syscalls
 - Single-pass compilation: source → lexer → parser+codegen → native binary
 - Faster than C -O0 on recursive workloads (fib(35): 27% faster)
+- Multi-file compilation with `import` and standard library
 - Arrays, augmented assignment (`+=` `-=` `*=`), string builtins
 - AI-native structured output (JSON Lines via `emit`)
 - Multiprocess concurrency with `spawn`/`wait` and pipe IPC
@@ -82,6 +83,19 @@ legna:
     output "\n"
 ```
 
+```legna
+# import standard library
+import "math"
+import "string"
+
+legna:
+    output abs(-42)
+    output "\n"
+    output pow(2, 10)
+    output "\n"
+    output is_alpha(65)
+```
+
 ## Performance
 
 fib(35) recursive benchmark, 20 iterations, Apple Silicon:
@@ -114,6 +128,7 @@ Legna generates code that beats `gcc -O0` through peephole optimizations — `_o
 | Structured I/O | `emit "key" value` (JSON Lines) |
 | File I/O | `open`/`close`/`read_line`/`write_line` |
 | Concurrency | `spawn:`/`wait()`, `pipe()`/`send`/`recv` |
+| Import | `import "math"`, `import "string"` |
 | Comments | `# single line` |
 | Indentation | 4 spaces or tab |
 
@@ -122,8 +137,9 @@ Legna generates code that beats `gcc -O0` through peephole optimizations — `_o
 ```
 legna/
 ├── src/macos_arm64/     # compiler source (modular ARM64 assembly)
+├── lib/                 # standard library (math, string)
 ├── docs/                # language manual (multi-file book)
-├── tests/               # automated test suite (33 tests)
+├── tests/               # automated test suite (36 tests)
 ├── helloworld.legna     # hello world example
 └── Makefile             # build system
 ```
@@ -143,7 +159,7 @@ Full language manual: [docs/README.md](docs/README.md)
 ## Tests
 
 ```bash
-make test    # 33/33 tests
+make test    # 36/36 tests
 ```
 
 ## License

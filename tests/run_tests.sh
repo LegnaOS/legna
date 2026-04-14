@@ -47,7 +47,7 @@ run_error_test() {
     fi
 }
 
-echo "Legna Compiler Test Suite v0.7"
+echo "Legna Compiler Test Suite v0.8"
 echo "=============================="
 echo ""
 
@@ -107,6 +107,11 @@ run_test "strlen" "tests/strlen.legna" "$(printf '5')"
 run_test "charat" "tests/charat.legna" "$(printf '104 111')"
 run_test "tonum" "tests/tonum.legna" "$(printf '123')"
 run_test "bubblesort" "tests/bubblesort.legna" "$(printf '1 3 4 5 8')"
+
+# v0.8 features: Multi-file compilation + import
+run_test "import_math" "tests/import_math.legna" "$(printf '42\n7\n3\n1024\n10')"
+run_test "import_string" "tests/import_string.legna" "$(printf '1\n1\n65\n104')"
+run_test "import_multi" "tests/import_multi.legna" "$(printf '5\n1\n27')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"
