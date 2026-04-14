@@ -83,11 +83,22 @@ _main:
     ldr w0, [x0]
     cbnz w0, _m_lib_done
 
-    // has imports? → multi-file compile
+    // has imports or extern/link? → multi-file compile
     adrp x0, _import_count@PAGE
     add x0, x0, _import_count@PAGEOFF
     ldr w0, [x0]
-    cbz w0, _m_no_imports
+    cbnz w0, _m_multi_file
+    adrp x0, _ext_count@PAGE
+    add x0, x0, _ext_count@PAGEOFF
+    ldr w0, [x0]
+    cbnz w0, _m_multi_file
+    adrp x0, _link_count@PAGE
+    add x0, x0, _link_count@PAGEOFF
+    ldr w0, [x0]
+    cbnz w0, _m_multi_file
+    b _m_no_imports
+
+_m_multi_file:
 
     // ── Multi-file path ──
     // Step 1: rename main .o so it won't be overwritten

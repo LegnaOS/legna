@@ -360,8 +360,8 @@ _blp_ret:
 _run_ld_multi:
     stp x29, x30, [sp, #-16]!
     stp x19, x20, [sp, #-16]!
-    // allocate argv on stack: max 30 entries * 8 = 240 bytes
-    sub sp, sp, #256
+    // allocate argv on stack: max 48 entries * 8 = 384 bytes
+    sub sp, sp, #384
 
     mov x19, #0                      // argv index
 
@@ -407,6 +407,25 @@ _rlm_lib_loop:
     add w2, w2, #1
     b _rlm_lib_loop
 _rlm_lib_done:
+
+    // add link library args (-l<name>)
+    adrp x1, _link_count@PAGE
+    add x1, x1, _link_count@PAGEOFF
+    ldr w1, [x1]
+    mov w2, #0
+_rlm_link_loop:
+    cmp w2, w1
+    b.ge _rlm_link_done
+    adrp x3, _link_tab@PAGE
+    add x3, x3, _link_tab@PAGEOFF
+    mov x4, #64
+    mul x4, x2, x4
+    add x3, x3, x4
+    str x3, [sp, x19, lsl #3]
+    add x19, x19, #1
+    add w2, w2, #1
+    b _rlm_link_loop
+_rlm_link_done:
 
     // remaining fixed args
     adrp x0, _lnk_lsys@PAGE
@@ -477,7 +496,7 @@ _rlm_lib_done:
     lsr w0, w0, #8
     and w0, w0, #0xFF
 
-    add sp, sp, #256
+    add sp, sp, #384
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret

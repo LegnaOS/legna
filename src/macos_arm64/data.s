@@ -34,6 +34,7 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_array
 .globl _kw_len, _kw_char_at, _kw_to_str, _kw_to_num
 .globl _kw_import
+.globl _kw_extern, _kw_link
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -68,6 +69,8 @@ _kw_char_at:   .asciz "char_at"
 _kw_to_str:    .asciz "to_str"
 _kw_to_num:    .asciz "to_num"
 _kw_import:    .asciz "import"
+_kw_extern:    .asciz "extern"
+_kw_link:      .asciz "link"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -103,7 +106,7 @@ _lnk_x:        .asciz "-x"
 .globl _fg_input_call, _fg_atoi_call, _fg_inbuf_ptr, _fg_add1
 .globl _fg_adrp_x0, _fg_add_x0
 .globl _fg_add_imm, _fg_sub_imm, _fg_cmp_imm
-.globl _fg_fn_pro, _fg_fn_epi, _fg_bl_uf, _fg_fn_ret
+.globl _fg_fn_pro, _fg_fn_epi, _fg_bl_uf, _fg_bl_c, _fg_fn_ret
 .globl _fg_flush_call, _fg_fork, _fg_cbnz_x1, _fg_child_exit
 .globl _fg_pipe_call, _fg_wait_call, _fg_send_call, _fg_recv_call
 .globl _fg_emit_int_call, _fg_emit_str_call
@@ -129,7 +132,7 @@ _fg_main:      .ascii "_main:\n    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n 
                .byte 0
 _fg_main2:     .asciz "\n"
 _fg_frame_ph:  .asciz "0000"
-_fg_exit:      .ascii "    bl _rt_flush\n    mov sp, x29\n    ldp x29, x30, [sp], #16\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
+_fg_exit:      .ascii "    mov x0, #0\n    bl _fflush\n    bl _rt_flush\n    mov sp, x29\n    ldp x29, x30, [sp], #16\n    mov x0, #0\n    mov x16, #1\n    svc #0x80\n"
                .byte 0
 _fg_ldr:       .asciz "    ldr x0, [x29, #-"
 _fg_ldr1:      .asciz "    ldr x1, [x29, #-"
@@ -193,6 +196,7 @@ _fg_fn_pro:    .ascii "    stp x29, x30, [sp, #-16]!\n    mov x29, sp\n    sub s
 _fg_fn_epi:    .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    ret\n"
                .byte 0
 _fg_bl_uf:     .asciz "    bl _uf_"
+_fg_bl_c:      .asciz "    bl _"
 _fg_fn_ret:    .ascii "    mov sp, x29\n    ldp x29, x30, [sp], #16\n    ret\n"
                .byte 0
 
@@ -266,6 +270,8 @@ _fg_nl_err:     .asciz "\n"
 .globl _is_lib_mode
 .globl _import_tab, _import_count
 .globl _lib_o_paths, _lib_o_count, _lib_path_buf, _main_o_path
+.globl _ext_tab, _ext_count
+.globl _link_tab, _link_count
 .globl _last_is_imm, _last_imm_val, _last_imm_out_pos
 .globl _last_is_var, _last_var_offset, _last_var_out_pos
 
@@ -313,3 +319,7 @@ _lib_o_paths:      .space 4096     // 16 entries * 256 bytes (paths to compiled 
 _lib_o_count:      .space 4
 _lib_path_buf:     .space 256      // temp buffer for building lib file paths
 _main_o_path:      .space 256      // path to main .o file
+_ext_tab:          .space 768      // 32 entries * 24 bytes (name_ptr(8) + name_len(4) + param_count(4) + padding(8))
+_ext_count:        .space 4
+_link_tab:         .space 1024     // 16 entries * 64 bytes (pre-built "-l<name>" strings)
+_link_count:       .space 4

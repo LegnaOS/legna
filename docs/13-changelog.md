@@ -4,7 +4,18 @@
 
 ---
 
-## v0.8（当前版本）
+## v0.9（当前版本）
+
+- FFI：`extern fn` 语法声明 C 函数，直接调用 libc（puts, malloc, strlen, abs...）
+- FFI：`link "lua"` 语法添加 `-l` 链接参数，支持外部库
+- FFI：字符串字面量自动 null-terminated，兼容 C 字符串
+- FFI：import/extern/link 可任意顺序混合声明
+- FFI：程序退出前自动 `fflush(0)`，确保 libc stdio 输出不丢失
+- 修复 `_fn_insert` 未保存 x21 导致跨函数同名参数偏移错误的 bug
+- Runtime 符号 `.globl` 导出，支持库函数引用主文件 runtime
+- 新增测试 2 个（ffi_libc、ffi_mixed），45/45 全部通过
+
+## v0.8
 
 - 多文件编译：`import "math"` 语法，编译器自动编译库文件并链接
 - 库模式：纯 `fn` 定义文件（无 `legna:` 块）编译为 `.o` 对象文件

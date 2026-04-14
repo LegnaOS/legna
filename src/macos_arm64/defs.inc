@@ -103,6 +103,10 @@
 // v0.8: Multi-file compilation
 .equ TOK_KW_IMPORT, 62
 
+// v0.9: FFI
+.equ TOK_KW_EXTERN, 63
+.equ TOK_KW_LINK,   64
+
 // Symbol types
 .equ TY_INT,        0
 .equ TY_STR,        1

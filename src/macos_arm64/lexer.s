@@ -1033,13 +1033,35 @@ _mk_try_to_num:
 _mk_try_import:
     // "import" (6)
     cmp x20, #6
-    b.ne _mk_ident
+    b.ne _mk_try_extern
     mov x0, x19
     adrp x1, _kw_import@PAGE
     add x1, x1, _kw_import@PAGEOFF
     mov x2, #6
     bl _strncmp
     cbz x0, _mk_import
+
+_mk_try_extern:
+    // "extern" (6)
+    cmp x20, #6
+    b.ne _mk_try_link
+    mov x0, x19
+    adrp x1, _kw_extern@PAGE
+    add x1, x1, _kw_extern@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_extern
+
+_mk_try_link:
+    // "link" (4)
+    cmp x20, #4
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_link@PAGE
+    add x1, x1, _kw_link@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_link
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -1145,6 +1167,12 @@ _mk_to_num:
     b _mk_ret
 _mk_import:
     mov w0, #TOK_KW_IMPORT
+    b _mk_ret
+_mk_extern:
+    mov w0, #TOK_KW_EXTERN
+    b _mk_ret
+_mk_link:
+    mov w0, #TOK_KW_LINK
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

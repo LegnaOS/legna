@@ -139,7 +139,7 @@ legna/
 ├── src/macos_arm64/     # 编译器源码（模块化纯 ARM64 汇编）
 ├── lib/                 # 标准库（math、string、bits、conv、algo、check、hash）
 ├── docs/                # 语言手册（多文件书籍结构）
-├── tests/               # 自动化测试（43 个）
+├── tests/               # 自动化测试（45 个）
 ├── helloworld.legna     # Hello World 示例
 └── Makefile             # 构建系统
 ```
@@ -159,7 +159,7 @@ legna/
 ## 测试
 
 ```bash
-make test    # 43/43 通过
+make test    # 45/45 通过
 ```
 
 ## 许可证

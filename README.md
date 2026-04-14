@@ -139,7 +139,7 @@ legna/
 ├── src/macos_arm64/     # compiler source (modular ARM64 assembly)
 ├── lib/                 # standard library (math, string, bits, conv, algo, check, hash)
 ├── docs/                # language manual (multi-file book)
-├── tests/               # automated test suite (43 tests)
+├── tests/               # automated test suite (45 tests)
 ├── helloworld.legna     # hello world example
 └── Makefile             # build system
 ```
@@ -159,7 +159,7 @@ Full language manual: [docs/README.md](docs/README.md)
 ## Tests
 
 ```bash
-make test    # 43/43 tests
+make test    # 45/45 tests
 ```
 
 ## License

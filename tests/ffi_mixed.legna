@@ -1,0 +1,12 @@
+extern fn abs(x)
+extern fn strlen(s)
+import "math"
+
+legna:
+    output abs(0 - 42)
+    output " "
+    output strlen("hello")
+    output " "
+    output gcd(12, 8)
+    output " "
+    output is_prime(97)

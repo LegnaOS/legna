@@ -1,0 +1,15 @@
+extern fn abs(x)
+extern fn strlen(s)
+extern fn getpid()
+extern fn puts(s)
+
+legna:
+    output abs(0 - 42)
+    output " "
+    output strlen("hello")
+    output " "
+    let pid = getpid()
+    let ok = 1
+    if pid <= 0:
+        ok = 0
+    output ok

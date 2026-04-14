@@ -676,6 +676,7 @@ _parse_program:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
 
     // reset state
     adrp x0, _tok_pos@PAGE
@@ -743,11 +744,25 @@ _pp_scan_done:
     add x0, x0, _import_count@PAGEOFF
     str wzr, [x0]
 
-    // parse import statements before fn definitions
-_pp_import_loop:
+    // parse import, extern fn, and link directives (any order)
+    adrp x0, _ext_count@PAGE
+    add x0, x0, _ext_count@PAGEOFF
+    str wzr, [x0]
+    adrp x0, _link_count@PAGE
+    add x0, x0, _link_count@PAGEOFF
+    str wzr, [x0]
+
+_pp_decl_loop:
     bl _tok_peek
     cmp w0, #TOK_KW_IMPORT
-    b.ne _pp_import_done
+    b.eq _pp_parse_import
+    cmp w0, #TOK_KW_EXTERN
+    b.eq _pp_parse_extern
+    cmp w0, #TOK_KW_LINK
+    b.eq _pp_parse_link
+    b _pp_decl_done
+
+_pp_parse_import:
     bl _tok_advance              // skip "import"
     // expect string literal
     bl _tok_peek
@@ -783,8 +798,70 @@ _pp_imp_copy_done:
     str w4, [x3]
     bl _tok_advance              // skip string
     bl _skip_nl
-    b _pp_import_loop
-_pp_import_done:
+    b _pp_decl_loop
+
+_pp_parse_extern:
+    bl _tok_advance              // skip "extern"
+    // expect "fn"
+    bl _tok_peek
+    cmp w0, #TOK_KW_FN
+    b.ne _pp_ext_no_fn
+    bl _tok_advance              // skip "fn"
+_pp_ext_no_fn:
+    // get function name
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _pp_err
+    bl _tok_current
+    ldr x1, [x0, #8]            // name_ptr
+    ldr w2, [x0, #4]            // name_len
+    stp x1, x2, [sp, #-16]!
+    bl _tok_advance
+    // expect "("
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pp_err
+    // count parameters (skip names)
+    mov w21, #0
+_pp_ext_param_loop:
+    bl _tok_peek
+    cmp w0, #TOK_RPAREN
+    b.eq _pp_ext_param_done
+    cbz w21, _pp_ext_param_skip
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pp_err
+_pp_ext_param_skip:
+    bl _tok_advance              // skip param name
+    add w21, w21, #1
+    b _pp_ext_param_loop
+_pp_ext_param_done:
+    bl _tok_advance              // skip ")"
+    // store in extern table
+    ldp x1, x2, [sp], #16       // name_ptr, name_len
+    mov x0, x1
+    mov x1, x2
+    mov w2, w21                  // param_count
+    bl _ext_insert
+    bl _skip_nl
+    b _pp_decl_loop
+
+_pp_parse_link:
+    bl _tok_advance              // skip "link"
+    bl _tok_peek
+    cmp w0, #TOK_STR
+    b.ne _pp_err
+    bl _tok_current
+    ldr x1, [x0, #8]            // lib name ptr
+    ldr w2, [x0, #4]            // lib name len
+    bl _link_add
+    bl _tok_advance              // skip string
+    bl _skip_nl
+    b _pp_decl_loop
+
+_pp_decl_done:
 
     // parse fn definitions before legna:
 _pp_fn_loop:
@@ -848,6 +925,7 @@ _pp_lib_mode:
 _pp_err:
     mov x0, #-1
 _pp_ret:
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret
@@ -2403,7 +2481,7 @@ _pfac_int_full:
 _pfac_str:
     cmp w0, #TOK_STR
     b.ne _pfac_ident
-    // string in factor context — just register it, load address
+    // string in factor context — register it and load address to x0
     bl _tok_current
     ldr x19, [x0, #8]
     ldr w20, [x0, #4]
@@ -2411,8 +2489,32 @@ _pfac_str:
     mov x0, x19
     mov x1, x20
     bl _reg_string
-    // we don't emit anything for string factor in expr context
-    // the caller (output) handles string specially
+    mov x19, x0                  // string index
+
+    // emit: adrp x0, _sN@PAGE / add x0, x0, _sN@PAGEOFF
+    adrp x0, _fg_adrp_x0@PAGE
+    add x0, x0, _fg_adrp_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_add_x0@PAGE
+    add x0, x0, _fg_add_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_sd@PAGE
+    add x0, x0, _fg_sd@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+
     mov x0, #0
     b _pfac_ret
 
@@ -3257,10 +3359,23 @@ _efc_pop_args:
     b _efc_pop_args
 
 _efc_emit_call:
+    // check if this is an extern C call
+    adrp x1, _efc_is_extern@PAGE
+    add x1, x1, _efc_is_extern@PAGEOFF
+    ldr w2, [x1]
+    str wzr, [x1]                // clear flag
+    cbnz w2, _efc_emit_c_call
     // emit: bl _uf_<name>
     adrp x0, _fg_bl_uf@PAGE
     add x0, x0, _fg_bl_uf@PAGEOFF
     bl _emit_str
+    b _efc_emit_name
+_efc_emit_c_call:
+    // emit: bl _<name>
+    adrp x0, _fg_bl_c@PAGE
+    add x0, x0, _fg_bl_c@PAGEOFF
+    bl _emit_str
+_efc_emit_name:
     mov x0, x19
     mov x1, x20
     bl _emit_raw
@@ -3272,13 +3387,20 @@ _efc_emit_call:
     b _efc_ret
 
 _efc_undef:
+    // check extern table first
+    mov x0, x19
+    mov x1, x20
+    bl _ext_lookup
+    cbnz x0, _efc_extern_call
+
     // check if imports exist — if so, trust the linker
     adrp x0, _import_count@PAGE
     add x0, x0, _import_count@PAGEOFF
     ldr w0, [x0]
-    cbz w0, _efc_undef_err
+    cbz w0, _efc_check_ext_only
 
     // blind call: parse args without param_count check
+_efc_blind_call_args:
     mov w0, #TOK_LPAREN
     bl _tok_expect
     cmp x0, #0
@@ -3337,6 +3459,23 @@ _efc_blind_pop:
     ldp x0, x1, [sp], #16
     sub w0, w0, #1
     b _efc_blind_pop
+
+_efc_extern_call:
+    // set extern flag, then reuse blind call arg parsing
+    adrp x1, _efc_is_extern@PAGE
+    add x1, x1, _efc_is_extern@PAGEOFF
+    mov w2, #1
+    str w2, [x1]
+    b _efc_blind_call_args
+
+_efc_check_ext_only:
+    // no imports — check if extern functions exist
+    adrp x0, _ext_count@PAGE
+    add x0, x0, _ext_count@PAGEOFF
+    ldr w0, [x0]
+    cbz w0, _efc_undef_err
+    // has externs but function not in extern table — error
+    b _efc_undef_err
 
 _efc_undef_err:
     bl _tok_line
@@ -4257,3 +4396,117 @@ _pemit_pop_x0:  .asciz "    ldr x0, [sp], #16\n"
 _pfac_tostr_code: .ascii "    adrp x1, _itoa_buf@PAGE\n    add x1, x1, _itoa_buf@PAGEOFF\n    bl _rt_itoa\n"
                   .byte 0
 _pfac_atoi_call:  .asciz "    bl _rt_atoi\n"
+
+// ────────────────────────────────────────
+// FFI: extern function table + link table
+// ────────────────────────────────────────
+.section __TEXT,__text
+.align 2
+
+// _ext_insert: x0=name_ptr, x1=name_len, w2=param_count
+.globl _ext_insert
+_ext_insert:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    mov x19, x0
+    mov x20, x1
+    mov w21, w2
+    adrp x0, _ext_count@PAGE
+    add x0, x0, _ext_count@PAGEOFF
+    ldr w22, [x0]
+    adrp x1, _ext_tab@PAGE
+    add x1, x1, _ext_tab@PAGEOFF
+    mov x2, #24
+    mul x3, x22, x2
+    add x1, x1, x3
+    str x19, [x1]               // name_ptr
+    str w20, [x1, #8]           // name_len
+    str w21, [x1, #12]          // param_count
+    add w22, w22, #1
+    str w22, [x0]
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _ext_lookup: x0=name_ptr, x1=name_len → x0=entry ptr or 0
+.globl _ext_lookup
+_ext_lookup:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    mov x19, x0
+    mov x20, x1
+    adrp x21, _ext_tab@PAGE
+    add x21, x21, _ext_tab@PAGEOFF
+    adrp x0, _ext_count@PAGE
+    add x0, x0, _ext_count@PAGEOFF
+    ldr w22, [x0]
+    mov x0, #0
+1:  cmp w0, w22
+    b.ge 2f
+    mov x1, #24
+    mul x1, x0, x1
+    add x2, x21, x1
+    ldr x3, [x2]                // entry name_ptr
+    ldr w4, [x2, #8]            // entry name_len
+    cmp w4, w20
+    b.ne 3f
+    stp x0, x2, [sp, #-16]!
+    mov x0, x19
+    mov x1, x3
+    mov x2, x20
+    bl _strncmp
+    mov x3, x0
+    ldp x0, x2, [sp], #16
+    cbz x3, 4f
+3:  add x0, x0, #1
+    b 1b
+2:  mov x0, #0
+    b 5f
+4:  mov x0, x2
+5:  ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _link_add: x1=name_ptr, w2=name_len — store lib name for linker
+.globl _link_add
+_link_add:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    mov x19, x1
+    mov w20, w2
+    adrp x0, _link_count@PAGE
+    add x0, x0, _link_count@PAGEOFF
+    ldr w1, [x0]
+    adrp x2, _link_tab@PAGE
+    add x2, x2, _link_tab@PAGEOFF
+    mov x3, #64
+    mul x3, x1, x3
+    add x2, x2, x3              // dest slot
+    // build "-l<name>"
+    mov w3, #'-'
+    strb w3, [x2]
+    mov w3, #'l'
+    strb w3, [x2, #1]
+    add x4, x2, #2
+    mov x5, #0
+1:  cmp w5, w20
+    b.ge 2f
+    ldrb w6, [x19, x5]
+    strb w6, [x4, x5]
+    add x5, x5, #1
+    b 1b
+2:  strb wzr, [x4, x5]
+    add w1, w1, #1
+    str w1, [x0]
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _efc_is_extern: flag for C call emit path
+.section __DATA,__bss
+.globl _efc_is_extern
+_efc_is_extern: .space 4

@@ -301,6 +301,14 @@ _ef_val:
     add x23, x23, #1
     b _ef_byte_loop
 _ef_byte_done:
+    // append null terminator for C compatibility
+    cbz x25, _ef_null_only         // no bytes emitted yet (empty string)
+    adrp x0, _fg_comma@PAGE
+    add x0, x0, _fg_comma@PAGEOFF
+    bl _emit_str
+_ef_null_only:
+    mov x0, #0
+    bl _emit_num
     adrp x0, _fg_nl@PAGE
     add x0, x0, _fg_nl@PAGEOFF
     bl _emit_str

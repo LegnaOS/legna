@@ -119,6 +119,8 @@ run_test "import_conv" "tests/import_conv.legna" "$(printf '48 57 97 102\n0 10 1
 run_test "import_algo" "tests/import_algo.legna" "$(printf '1\n1\n25 75\n50 0\n10 5050\n15\n7 7')"
 run_test "import_check" "tests/import_check.legna" "$(printf '11/11')"
 run_test "import_hash" "tests/import_hash.legna" "$(printf '1\n1\n1\n1')"
+run_test "ffi_libc" "tests/ffi_libc.legna" "$(printf '42 5 1')"
+run_test "ffi_mixed" "tests/ffi_mixed.legna" "$(printf '42 5 4 1')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"
