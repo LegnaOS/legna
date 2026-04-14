@@ -1,0 +1,51 @@
+fn rand_seed(s):
+    # xorshift64 state init
+    if s == 0:
+        return 123456789
+    return s
+
+fn rand_next(s):
+    # xorshift step using arithmetic (no bitwise ops)
+    # simple LCG: s = (s * 6364136223846793005 + 1) mod 2^32
+    # simplified for Legna's int range
+    let a = 1103515245
+    let c = 12345
+    let m = 2147483647
+    let r = s * a + c
+    if r < 0:
+        r = 0 - r
+    return r % m + 1
+
+fn rand_range(s, lo, hi):
+    let r = rand_next(s)
+    let span = hi - lo
+    if span <= 0:
+        return lo
+    return lo + r % span
+
+fn lerp(a, b, t, scale):
+    # linear interpolation: a + (b - a) * t / scale
+    return a + (b - a) * t / scale
+
+fn map_range(x, in_lo, in_hi, out_lo, out_hi):
+    # map x from [in_lo, in_hi] to [out_lo, out_hi]
+    return out_lo + (x - in_lo) * (out_hi - out_lo) / (in_hi - in_lo)
+
+fn sum_range(lo, hi):
+    let total = 0
+    for i in lo..hi:
+        total += i
+    return total
+
+fn avg(a, b):
+    return (a + b) / 2
+
+fn dist(x1, y1, x2, y2):
+    # Manhattan distance
+    let dx = x1 - x2
+    let dy = y1 - y2
+    if dx < 0:
+        dx = 0 - dx
+    if dy < 0:
+        dy = 0 - dy
+    return dx + dy

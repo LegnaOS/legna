@@ -137,9 +137,9 @@ Legna generates code that beats `gcc -O0` through peephole optimizations — `_o
 ```
 legna/
 ├── src/macos_arm64/     # compiler source (modular ARM64 assembly)
-├── lib/                 # standard library (math, string, bits, conv)
+├── lib/                 # standard library (math, string, bits, conv, algo, check, hash)
 ├── docs/                # language manual (multi-file book)
-├── tests/               # automated test suite (40 tests)
+├── tests/               # automated test suite (43 tests)
 ├── helloworld.legna     # hello world example
 └── Makefile             # build system
 ```
@@ -159,7 +159,7 @@ Full language manual: [docs/README.md](docs/README.md)
 ## Tests
 
 ```bash
-make test    # 40/40 tests
+make test    # 43/43 tests
 ```
 
 ## License

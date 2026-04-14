@@ -1,0 +1,49 @@
+import "algo"
+
+legna:
+    # rand_seed / rand_next: deterministic sequence
+    let s = rand_seed(0)
+    let s2 = rand_next(s)
+    let s3 = rand_next(s2)
+    # just verify they produce nonzero distinct values
+    let ok = 1
+    if s2 == 0:
+        ok = 0
+    if s3 == 0:
+        ok = 0
+    if s2 == s3:
+        ok = 0
+    output ok
+    output "\n"
+    # rand_range
+    let r = rand_range(42, 10, 20)
+    let in_range = 1
+    if r < 10:
+        in_range = 0
+    if r >= 20:
+        in_range = 0
+    output in_range
+    output "\n"
+    # lerp: lerp(0, 100, 1, 4) = 0 + 100*1/4 = 25
+    output lerp(0, 100, 1, 4)
+    output " "
+    output lerp(0, 100, 3, 4)
+    output "\n"
+    # map_range: map 5 from [0,10] to [0,100] = 50
+    output map_range(5, 0, 10, 0, 100)
+    output " "
+    output map_range(0, 0, 10, 0, 100)
+    output "\n"
+    # sum_range: 0+1+2+3+4 = 10
+    output sum_range(0, 5)
+    output " "
+    # 1+2+3+...+100 = 5050
+    output sum_range(1, 101)
+    output "\n"
+    # avg
+    output avg(10, 20)
+    output "\n"
+    # dist (Manhattan)
+    output dist(0, 0, 3, 4)
+    output " "
+    output dist(1, 1, 4, 5)

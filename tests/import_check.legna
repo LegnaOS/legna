@@ -1,0 +1,17 @@
+import "check"
+
+legna:
+    let pass = 0
+    pass += assert_eq(5, 5)
+    pass += assert_ne(3, 4)
+    pass += assert_gt(10, 5)
+    pass += assert_lt(3, 7)
+    pass += assert_ge(5, 5)
+    pass += assert_ge(6, 5)
+    pass += assert_le(5, 5)
+    pass += assert_le(4, 5)
+    pass += assert_range(5, 0, 10)
+    pass += assert_true(1)
+    pass += assert_false(0)
+    output pass
+    output "/11"

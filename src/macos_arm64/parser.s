@@ -3097,6 +3097,7 @@ _pcont_err:
 _fn_insert:
     stp x29, x30, [sp, #-16]!
     stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
     mov x19, x0
     mov x20, x1
     mov w21, w2
@@ -3114,6 +3115,7 @@ _fn_insert:
     add w1, w1, #1
     str w1, [x0]
     mov x0, x4
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret

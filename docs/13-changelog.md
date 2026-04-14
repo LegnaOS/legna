@@ -8,15 +8,20 @@
 
 - 多文件编译：`import "math"` 语法，编译器自动编译库文件并链接
 - 库模式：纯 `fn` 定义文件（无 `legna:` 块）编译为 `.o` 对象文件
-- 标准库 4 个模块：
+- 标准库 7 个模块：
   - `math`：abs, min, max, clamp, pow, sign, gcd, lcm, factorial, fib, sqrt_int, is_prime, mod, div_ceil
   - `string`：str_eq, str_contains, is_digit, is_alpha, to_upper, to_lower, is_alnum, is_space, is_upper, is_lower, is_print, is_hex, hex_val, digit_val
   - `bits`：shl, shr, bit_get, bit_set, bit_clear, bit_and, bit_or, bit_xor, bit_not, popcount
   - `conv`：to_hex_digit, from_hex_digit, to_bin_digit
+  - `algo`：rand_seed, rand_next, rand_range, lerp, map_range, sum_range, avg, dist
+  - `check`：assert_eq/ne/gt/lt/ge/le, assert_range, assert_true/false, bool, ternary
+  - `hash`：hash_int, hash_pair, hash_combine, hash_mix
+- 修复 `_fn_insert` 未保存 x21 导致跨函数同名参数偏移错误的 bug
+- Runtime 符号 `.globl` 导出，支持库函数引用主文件 runtime
 - 多文件链接：`_run_ld_multi` 支持链接主文件 + 多个库 `.o`
 - 函数符号导出：所有 `fn` 定义自动 emit `.globl _uf_<name>`
 - 盲调用：有 import 时，未知函数信任链接器解析
-- 新增测试 7 个，40/40 全部通过
+- 新增测试 10 个，43/43 全部通过
 
 ## v0.7
 

@@ -294,11 +294,18 @@ _save_lib_o:
     add x1, x1, _tmp_path_o@PAGEOFF
     bl _strcpy
 
-    // append index digit to make unique
+    // append 2-digit index to make unique (00-99)
     mov x0, x20
     bl _strlen
-    add w1, w19, #'0'
-    strb w1, [x20, x0]
+    mov w1, w19
+    mov w3, #10
+    udiv w4, w1, w3              // tens digit
+    msub w5, w4, w3, w1          // ones digit
+    add w4, w4, #'0'
+    add w5, w5, #'0'
+    strb w4, [x20, x0]
+    add x0, x0, #1
+    strb w5, [x20, x0]
     add x0, x0, #1
     strb wzr, [x20, x0]
 

@@ -15,6 +15,11 @@ _emit_runtime:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
+    // export runtime symbols for cross-file linking
+    adrp x0, _rt_globl_code@PAGE
+    add x0, x0, _rt_globl_code@PAGEOFF
+    bl _emit_str
+
     // _rt_itoa: x0=int → x0=length, writes to _itoa_buf
     adrp x0, _rt_itoa_code@PAGE
     add x0, x0, _rt_itoa_code@PAGEOFF
@@ -381,6 +386,14 @@ _new_label:
 // Runtime code templates (emitted as text)
 // ────────────────────────────────────────
 .section __DATA,__data
+
+_rt_globl_code:
+    .ascii ".globl _rt_itoa, _rt_atoi, _rt_read_line, _rt_buf_write, _rt_flush\n"
+    .ascii ".globl _rt_open_r, _rt_open_w, _rt_close, _rt_read_line_fd\n"
+    .ascii ".globl _rt_emit_int, _rt_emit_str, _rt_write_line\n"
+    .ascii ".globl _rt_send, _rt_recv, _rt_wait, _rt_pipe\n"
+    .ascii ".globl _itoa_buf, _ob_buf, _ob_pos, _input_buf, _path_buf, _recv_buf\n"
+    .byte 0
 
 _rt_itoa_code:
     .ascii "_rt_itoa:\n"

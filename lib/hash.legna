@@ -1,0 +1,18 @@
+fn hash_int(x):
+    let h = x + 2127912214
+    h = h + h * 524288
+    if h < 0:
+        h = 0 - h
+    return h % 2147483647
+
+fn hash_pair(a, b):
+    return hash_int(a * 31 + b)
+
+fn hash_combine(h1, h2):
+    return h1 * 31 + h2
+
+fn hash_mix(a, b, c):
+    let h = hash_int(a)
+    h = hash_combine(h, hash_int(b))
+    h = hash_combine(h, hash_int(c))
+    return h
