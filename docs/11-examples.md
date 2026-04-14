@@ -201,8 +201,10 @@ legna:
 
 | 库 | 函数 |
 |---|---|
-| `math` | `abs(x)`, `min(a,b)`, `max(a,b)`, `clamp(x,lo,hi)`, `pow(base,exp)` |
-| `string` | `str_eq(a,b)`, `str_contains(s,c)`, `is_digit(c)`, `is_alpha(c)`, `to_upper(c)`, `to_lower(c)` |
+| `math` | `abs`, `min`, `max`, `clamp`, `pow`, `sign`, `gcd`, `lcm`, `factorial`, `fib`, `sqrt_int`, `is_prime`, `mod`, `div_ceil` |
+| `string` | `str_eq`, `str_contains`, `is_digit`, `is_alpha`, `to_upper`, `to_lower`, `is_alnum`, `is_space`, `is_upper`, `is_lower`, `is_print`, `is_hex`, `hex_val`, `digit_val` |
+| `bits` | `shl`, `shr`, `bit_get`, `bit_set`, `bit_clear`, `bit_and`, `bit_or`, `bit_xor`, `bit_not`, `popcount` |
+| `conv` | `to_hex_digit`, `from_hex_digit`, `to_bin_digit` |
 
 ---
 

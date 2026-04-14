@@ -1,0 +1,25 @@
+import "conv"
+
+legna:
+    # to_hex_digit: 0->'0'(48), 9->'9'(57), 10->'a'(97), 15->'f'(102)
+    output to_hex_digit(0)
+    output " "
+    output to_hex_digit(9)
+    output " "
+    output to_hex_digit(10)
+    output " "
+    output to_hex_digit(15)
+    output "\n"
+    # from_hex_digit: '0'->0, 'A'->10, 'f'->15, 'g'->-1
+    output from_hex_digit(48)
+    output " "
+    output from_hex_digit(65)
+    output " "
+    output from_hex_digit(102)
+    output " "
+    output from_hex_digit(103)
+    output "\n"
+    # to_bin_digit: 0->'0'(48), 1->'1'(49)
+    output to_bin_digit(0)
+    output " "
+    output to_bin_digit(1)

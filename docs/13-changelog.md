@@ -8,11 +8,15 @@
 
 - 多文件编译：`import "math"` 语法，编译器自动编译库文件并链接
 - 库模式：纯 `fn` 定义文件（无 `legna:` 块）编译为 `.o` 对象文件
-- 标准库：`lib/math.legna`（abs、min、max、clamp、pow）、`lib/string.legna`（str_eq、is_digit、is_alpha、to_upper、to_lower 等）
+- 标准库 4 个模块：
+  - `math`：abs, min, max, clamp, pow, sign, gcd, lcm, factorial, fib, sqrt_int, is_prime, mod, div_ceil
+  - `string`：str_eq, str_contains, is_digit, is_alpha, to_upper, to_lower, is_alnum, is_space, is_upper, is_lower, is_print, is_hex, hex_val, digit_val
+  - `bits`：shl, shr, bit_get, bit_set, bit_clear, bit_and, bit_or, bit_xor, bit_not, popcount
+  - `conv`：to_hex_digit, from_hex_digit, to_bin_digit
 - 多文件链接：`_run_ld_multi` 支持链接主文件 + 多个库 `.o`
 - 函数符号导出：所有 `fn` 定义自动 emit `.globl _uf_<name>`
 - 盲调用：有 import 时，未知函数信任链接器解析
-- 新增测试 3 个（import_math、import_string、import_multi），36/36 全部通过
+- 新增测试 7 个，40/40 全部通过
 
 ## v0.7
 

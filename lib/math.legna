@@ -25,3 +25,94 @@ fn pow(base, exp):
     for i in 0..exp:
         result *= base
     return result
+
+fn sign(x):
+    if x > 0:
+        return 1
+    if x < 0:
+        return 0 - 1
+    return 0
+
+fn gcd(a, b):
+    if a < 0:
+        a = 0 - a
+    if b < 0:
+        b = 0 - b
+    while b != 0:
+        let t = b
+        b = a % t
+        a = t
+    return a
+
+fn lcm(a, b):
+    if a == 0:
+        return 0
+    if b == 0:
+        return 0
+    let g = gcd(a, b)
+    let r = a / g * b
+    if r < 0:
+        return 0 - r
+    return r
+
+fn factorial(n):
+    let r = 1
+    for i in 1..n + 1:
+        r *= i
+    return r
+
+fn fib(n):
+    if n < 2:
+        return n
+    let a = 0
+    let b = 1
+    for i in 2..n + 1:
+        let t = a + b
+        a = b
+        b = t
+    return b
+
+fn sqrt_int(x):
+    if x <= 0:
+        return 0
+    let g = x
+    let g2 = (g + x / g) / 2
+    while g2 < g:
+        g = g2
+        g2 = (g + x / g) / 2
+    return g
+
+fn is_prime(n):
+    if n < 2:
+        return 0
+    if n < 4:
+        return 1
+    if n % 2 == 0:
+        return 0
+    if n % 3 == 0:
+        return 0
+    let i = 5
+    while i * i <= n:
+        if n % i == 0:
+            return 0
+        if n % (i + 2) == 0:
+            return 0
+        i += 6
+    return 1
+
+fn mod(a, b):
+    let r = a % b
+    if r < 0:
+        r += b
+    return r
+
+fn div_ceil(a, b):
+    let q = a / b
+    if q * b != a:
+        if a > 0:
+            if b > 0:
+                q += 1
+        if a < 0:
+            if b < 0:
+                q += 1
+    return q

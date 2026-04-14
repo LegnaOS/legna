@@ -1,0 +1,64 @@
+fn shl(x, n):
+    for i in 0..n:
+        x *= 2
+    return x
+
+fn shr(x, n):
+    for i in 0..n:
+        x = x / 2
+    return x
+
+fn bit_get(x, n):
+    let s = shr(x, n)
+    return s % 2
+
+fn bit_set(x, n):
+    let b = shl(1, n)
+    if bit_get(x, n) == 0:
+        return x + b
+    return x
+
+fn bit_clear(x, n):
+    let b = shl(1, n)
+    if bit_get(x, n) == 1:
+        return x - b
+    return x
+
+fn bit_and(a, b):
+    let r = 0
+    for i in 0..32:
+        if bit_get(a, i) == 1:
+            if bit_get(b, i) == 1:
+                r = r + shl(1, i)
+    return r
+
+fn bit_or(a, b):
+    let r = 0
+    for i in 0..32:
+        let ba = bit_get(a, i)
+        let bb = bit_get(b, i)
+        if ba == 1:
+            r = r + shl(1, i)
+        else:
+            if bb == 1:
+                r = r + shl(1, i)
+    return r
+
+fn bit_xor(a, b):
+    let r = 0
+    for i in 0..32:
+        let ba = bit_get(a, i)
+        let bb = bit_get(b, i)
+        if ba != bb:
+            r = r + shl(1, i)
+    return r
+
+fn bit_not(x):
+    return bit_xor(x, 4294967295)
+
+fn popcount(x):
+    let c = 0
+    for i in 0..32:
+        if bit_get(x, i) == 1:
+            c += 1
+    return c

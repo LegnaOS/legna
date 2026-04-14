@@ -1,0 +1,25 @@
+fn to_hex_digit(n):
+    if n >= 0:
+        if n <= 9:
+            return n + 48
+    if n >= 10:
+        if n <= 15:
+            return n + 87
+    return 0
+
+fn from_hex_digit(c):
+    if c >= 48:
+        if c <= 57:
+            return c - 48
+    if c >= 65:
+        if c <= 70:
+            return c - 55
+    if c >= 97:
+        if c <= 102:
+            return c - 87
+    return 0 - 1
+
+fn to_bin_digit(n):
+    if n == 0:
+        return 48
+    return 49

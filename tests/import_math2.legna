@@ -1,0 +1,60 @@
+import "math"
+
+legna:
+    # sign
+    output sign(42)
+    output " "
+    output sign(0)
+    output " "
+    output sign(0 - 7)
+    output "\n"
+    # gcd / lcm
+    output gcd(12, 8)
+    output " "
+    output lcm(4, 6)
+    output "\n"
+    # factorial
+    output factorial(0)
+    output " "
+    output factorial(5)
+    output " "
+    output factorial(10)
+    output "\n"
+    # fib
+    output fib(0)
+    output " "
+    output fib(1)
+    output " "
+    output fib(10)
+    output "\n"
+    # sqrt_int
+    output sqrt_int(0)
+    output " "
+    output sqrt_int(1)
+    output " "
+    output sqrt_int(100)
+    output " "
+    output sqrt_int(99)
+    output "\n"
+    # is_prime
+    output is_prime(1)
+    output " "
+    output is_prime(2)
+    output " "
+    output is_prime(7)
+    output " "
+    output is_prime(9)
+    output " "
+    output is_prime(97)
+    output "\n"
+    # mod (positive result for negative dividend)
+    output mod(7, 3)
+    output " "
+    output mod(0 - 1, 5)
+    output "\n"
+    # div_ceil
+    output div_ceil(7, 3)
+    output " "
+    output div_ceil(6, 3)
+    output " "
+    output div_ceil(1, 3)

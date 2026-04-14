@@ -1,0 +1,50 @@
+import "string"
+
+legna:
+    # is_alnum
+    output is_alnum(65)
+    output " "
+    output is_alnum(48)
+    output " "
+    output is_alnum(32)
+    output "\n"
+    # is_space
+    output is_space(32)
+    output " "
+    output is_space(9)
+    output " "
+    output is_space(65)
+    output "\n"
+    # is_upper / is_lower
+    output is_upper(65)
+    output " "
+    output is_upper(97)
+    output " "
+    output is_lower(97)
+    output " "
+    output is_lower(65)
+    output "\n"
+    # is_print
+    output is_print(32)
+    output " "
+    output is_print(126)
+    output " "
+    output is_print(31)
+    output "\n"
+    # is_hex / hex_val
+    output is_hex(48)
+    output " "
+    output is_hex(102)
+    output " "
+    output is_hex(103)
+    output "\n"
+    output hex_val(48)
+    output " "
+    output hex_val(65)
+    output " "
+    output hex_val(102)
+    output "\n"
+    # digit_val
+    output digit_val(53)
+    output " "
+    output digit_val(64)
