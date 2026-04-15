@@ -4,7 +4,7 @@
 
 ---
 
-Legna 有四种数据类型，在声明时自动推断：
+Legna 有六种数据类型，在声明时自动推断：
 
 ## 4.1 整数（int）
 
@@ -76,6 +76,38 @@ close(fd)
 ```
 
 文件描述符本质上是整数，但语义上代表一个打开的文件句柄。
+
+## 4.6 结构体（struct）
+
+用户自定义复合类型，栈上分配，字段为 64 位整数。
+
+```legna
+struct point:
+    x
+    y
+
+legna:
+    let p = point(10, 20)
+    output p.x              # 10
+    output p.y              # 20
+    p.x = 30                # 字段写入
+    output p.x              # 30
+```
+
+结构体字段偏移在编译期计算，访问效率与普通变量相同。字段数量最多 11 个。
+
+### 方法调用
+
+结构体变量可以用 `.method()` 语法调用函数，所有字段自动作为参数传递：
+
+```legna
+fn magnitude(px, py):
+    return px * px + py * py
+
+legna:
+    let p = point(3, 4)
+    output p.magnitude()    # → magnitude(3, 4) = 25
+```
 
 ---
 

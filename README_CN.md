@@ -10,6 +10,8 @@
 - 单 pass 编译：源码 → 词法分析 → 语法分析+代码生成 → 原生二进制
 - 递归场景比 C -O0 快 27%（fib(35): 2,313M vs 3,165M cycles）
 - 多文件编译：`import` 语法 + 标准库
+- 结构体、方法调用、函数指针、高阶函数
+- FFI：`extern fn` + `link` 直接调用 C/C++/Lua
 - 数组、增强赋值（`+=` `-=` `*=`）、字符串内建函数
 - AI 原生结构化输出（JSON Lines，`emit` 指令）
 - 多进程并发：`spawn`/`wait` + 管道 IPC
@@ -139,7 +141,7 @@ legna/
 ├── src/macos_arm64/     # 编译器源码（模块化纯 ARM64 汇编）
 ├── lib/                 # 标准库（math、string、bits、conv、algo、check、hash）
 ├── docs/                # 语言手册（多文件书籍结构）
-├── tests/               # 自动化测试（45 个）
+├── tests/               # 自动化测试（48 个）
 ├── helloworld.legna     # Hello World 示例
 └── Makefile             # 构建系统
 ```
@@ -159,7 +161,7 @@ legna/
 ## 测试
 
 ```bash
-make test    # 45/45 通过
+make test    # 48/48 通过
 ```
 
 ## 许可证

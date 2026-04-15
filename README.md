@@ -10,6 +10,8 @@ A minimalist programming language. The compiler is written in pure ARM64 assembl
 - Single-pass compilation: source → lexer → parser+codegen → native binary
 - Faster than C -O0 on recursive workloads (fib(35): 27% faster)
 - Multi-file compilation with `import` and standard library
+- Struct types, method calls, function pointers, higher-order functions
+- FFI: call C/C++/Lua directly with `extern fn` and `link`
 - Arrays, augmented assignment (`+=` `-=` `*=`), string builtins
 - AI-native structured output (JSON Lines via `emit`)
 - Multiprocess concurrency with `spawn`/`wait` and pipe IPC
@@ -139,7 +141,7 @@ legna/
 ├── src/macos_arm64/     # compiler source (modular ARM64 assembly)
 ├── lib/                 # standard library (math, string, bits, conv, algo, check, hash)
 ├── docs/                # language manual (multi-file book)
-├── tests/               # automated test suite (45 tests)
+├── tests/               # automated test suite (48 tests)
 ├── helloworld.legna     # hello world example
 └── Makefile             # build system
 ```
@@ -159,7 +161,7 @@ Full language manual: [docs/README.md](docs/README.md)
 ## Tests
 
 ```bash
-make test    # 45/45 tests
+make test    # 48/48 tests
 ```
 
 ## License

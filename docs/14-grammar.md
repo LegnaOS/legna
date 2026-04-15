@@ -5,9 +5,16 @@
 ---
 
 ```ebnf
-program      = { import_stmt } { fn_def } entry_block ;
+program      = { import_stmt | extern_stmt | link_stmt }
+               { fn_def | struct_def }
+               entry_block ;
 
 import_stmt  = "import" STRING NEWLINE ;
+extern_stmt  = "extern" "fn" IDENT "(" [ param_list ] ")" NEWLINE ;
+link_stmt    = "link" STRING NEWLINE ;
+
+struct_def   = "struct" IDENT ":" NEWLINE
+               INDENT { IDENT NEWLINE } DEDENT ;
 
 fn_def       = "fn" IDENT "(" [ param_list ] ")" ":" NEWLINE
                INDENT { statement } DEDENT ;
@@ -37,10 +44,12 @@ statement    = let_stmt
 
 let_stmt     = "let" IDENT "=" expression NEWLINE
              | "let" IDENT "=" "array" "(" INTEGER ")" NEWLINE
+             | "let" IDENT "=" IDENT "(" [ arg_list ] ")" NEWLINE
              | "let" IDENT "=" spawn_expr ;
 assign_stmt  = IDENT "=" expression NEWLINE
              | IDENT ( "+=" | "-=" | "*=" ) expression NEWLINE
-             | IDENT "[" expression "]" "=" expression NEWLINE ;
+             | IDENT "[" expression "]" "=" expression NEWLINE
+             | IDENT "." IDENT "=" expression NEWLINE ;
 output_stmt  = "output" ( expression | STRING ) NEWLINE ;
 emit_stmt    = "emit" STRING expression NEWLINE ;
 send_stmt    = "send" IDENT STRING expression NEWLINE ;
@@ -80,6 +89,8 @@ factor       = INTEGER
              | IDENT
              | IDENT "(" [ arg_list ] ")"
              | IDENT "[" expression "]"
+             | IDENT "." IDENT
+             | IDENT "." IDENT "(" [ arg_list ] ")"
              | "input_num" "(" ")"
              | "input_str" "(" ")"
              | "len" "(" IDENT ")"

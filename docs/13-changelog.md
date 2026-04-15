@@ -4,7 +4,20 @@
 
 ---
 
-## v0.9（当前版本）
+## v1.0（当前版本）
+
+- struct 类型：`struct point: x, y` 用户自定义复合类型，栈分配，编译期字段偏移
+- struct 实例化：`let p = point(10, 20)`，字段读取 `p.x`，字段写入 `p.x = 30`
+- 方法调用语法糖：`p.method()` 自动展开为 `method(p.x, p.y, ...)`
+- 函数指针：函数名作为值传递 `let f = double`，间接调用 `f(x)`
+- 高阶函数：`apply(double, 5)` 函数作为参数传递
+- dot 操作符：lexer 区分 `.`（字段访问）和 `..`（范围）
+- link 支持 .o 文件路径：`link "/tmp/mylib.o"` 直接链接编译产物
+- 链接器自动添加 `-L/opt/homebrew/lib` 支持 homebrew 库
+- 修复 import + extern/link 混用时计数被库编译重置的 bug
+- 新增测试 3 个（struct、method、fnptr），48/48 全部通过
+
+## v0.9
 
 - FFI：`extern fn` 语法声明 C 函数，直接调用 libc（puts, malloc, strlen, abs...）
 - FFI：`link "lua"` 语法添加 `-l` 链接参数，支持外部库

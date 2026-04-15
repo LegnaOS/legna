@@ -61,6 +61,66 @@ legna:
     let x = factorial(5) # 表达式调用
 ```
 
+## 8.6 外部函数（FFI）
+
+使用 `extern fn` 声明 C/C++ 函数，通过 `link` 指定链接库或 `.o` 文件：
+
+```legna
+extern fn puts(s)
+extern fn abs(x)
+extern fn malloc(size)
+link "lua"
+link "/tmp/mylib.o"
+
+legna:
+    puts("hello from C")
+    output abs(0 - 42)
+```
+
+- `extern fn` 声明的函数直接调用 libc 或外部库符号
+- `link "name"` 添加 `-lname` 链接参数
+- `link "path.o"` 直接链接 `.o` 文件
+- 字符串字面量自动 null-terminated，兼容 C 字符串
+- import/extern/link 可任意顺序混合声明
+
+## 8.7 函数指针与高阶函数
+
+函数名可以作为值传递，存储在变量中，或作为参数传递给其他函数：
+
+```legna
+fn double(x):
+    return x * 2
+
+fn apply(f, x):
+    return f(x)
+
+legna:
+    output apply(double, 5)   # 10
+    let f = double
+    output f(10)               # 20
+```
+
+函数指针通过 `adrp`/`add` 加载函数地址，间接调用通过 `blr` 指令实现。
+
+## 8.8 方法调用
+
+结构体变量可以用 `.method()` 语法调用函数，所有字段自动展开为参数：
+
+```legna
+struct point:
+    x
+    y
+
+fn magnitude(px, py):
+    return px * px + py * py
+
+legna:
+    let p = point(3, 4)
+    output p.magnitude()    # → magnitude(3, 4) = 25
+```
+
+`p.method(extra)` 展开为 `method(p.x, p.y, extra)`。
+
 ---
 
 > [← 控制流](07-control-flow.md) | [返回目录](README.md) | [输入输出 →](09-io.md)
