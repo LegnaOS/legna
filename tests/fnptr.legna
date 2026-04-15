@@ -1,0 +1,19 @@
+fn double(x):
+    return x * 2
+
+fn triple(x):
+    return x * 3
+
+fn apply(f, x):
+    return f(x)
+
+legna:
+    output apply(double, 5)
+    output " "
+    output apply(triple, 5)
+    output " "
+    let f = double
+    output f(10)
+    output " "
+    f = triple
+    output f(10)

@@ -109,6 +109,7 @@ _lnk_lbrew:    .asciz "-L/opt/homebrew/lib"
 .globl _fg_itoa_call, _fg_str_out
 .globl _fg_input_call, _fg_atoi_call, _fg_inbuf_ptr, _fg_add1
 .globl _fg_adrp_x0, _fg_add_x0
+.globl _fg_fn_uf, _fg_blr_x0, _fg_ldr_x9, _fg_blr_x9
 .globl _fg_add_imm, _fg_sub_imm, _fg_cmp_imm
 .globl _fg_fn_pro, _fg_fn_epi, _fg_bl_uf, _fg_bl_c, _fg_fn_ret
 .globl _fg_flush_call, _fg_fork, _fg_cbnz_x1, _fg_child_exit
@@ -192,6 +193,10 @@ _fg_inbuf_ptr:  .ascii "    adrp x0, _input_buf@PAGE\n    add x0, x0, _input_buf
 _fg_add1:      .asciz "    add x0, x0, #1\n"
 _fg_adrp_x0:   .asciz "    adrp x0, "
 _fg_add_x0:    .asciz "    add x0, x0, "
+_fg_fn_uf:     .asciz "_uf_"
+_fg_blr_x0:    .asciz "    blr x0\n"
+_fg_ldr_x9:    .asciz "    ldr x9, [x29, #-"
+_fg_blr_x9:    .asciz "    blr x9\n"
 _fg_add_imm:   .asciz "    add x0, x0, #"
 _fg_sub_imm:   .asciz "    sub x0, x0, #"
 _fg_cmp_imm:   .asciz "    cmp x0, #"

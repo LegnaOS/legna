@@ -2558,6 +2558,9 @@ _parse_factor:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    stp x23, x24, [sp, #-16]!
+    stp x25, x26, [sp, #-16]!
 
     // clear _last_is_var flag (set only in variable load path)
     adrp x1, _last_is_var@PAGE
@@ -3177,6 +3180,12 @@ _pfac_struct_read:
     ldr x20, [x0, #8]           // field name_ptr
     ldr w21, [x0, #4]           // field name_len
     bl _tok_advance              // skip field name
+
+    // v1.0: check if method call: field_name followed by "("
+    bl _tok_peek
+    cmp w0, #TOK_LPAREN
+    b.eq _pfac_method_call
+
     // resolve field index
     ldr x0, [x19, #24]          // struct descriptor ptr
     mov x1, x20
@@ -3196,6 +3205,100 @@ _pfac_struct_read:
     add x1, x1, _last_is_var@PAGEOFF
     str wzr, [x1]
     bl _emit_load_var
+    mov x0, #0
+    b _pfac_ret
+
+_pfac_method_call:
+    // x19 = sym entry (struct var), x20 = method name_ptr, w21 = method name_len
+    // Strategy: p.method(extra_args) → method(p.field0, p.field1, ..., extra_args)
+    // Push all struct fields as args, then any extra args from "()"
+    ldr x22, [x19, #24]         // struct descriptor ptr
+    ldr w23, [x22, #12]         // field_count
+    ldr w24, [x19, #16]         // struct base offset
+
+    // push each field value onto stack
+    mov w25, #0
+_pmc_push_fields:
+    cmp w25, w23
+    b.ge _pmc_fields_done
+    // field i at [x29, #-(base - i*8)]
+    mov w0, w24
+    mov w1, w25
+    lsl w1, w1, #3
+    sub w0, w0, w1
+    bl _emit_load_var
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    add w25, w25, #1
+    b _pmc_push_fields
+_pmc_fields_done:
+    // w25 = total arg count (starts with field_count)
+    // parse extra args from "(...)"
+    bl _tok_advance              // skip "("
+_pmc_extra_loop:
+    bl _tok_peek
+    cmp w0, #TOK_RPAREN
+    b.eq _pmc_extra_done
+    // expect comma before extra args
+    cmp w25, w23
+    b.eq _pmc_extra_parse        // first extra arg: no comma if no fields... actually always comma
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+_pmc_extra_parse:
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    add w25, w25, #1
+    b _pmc_extra_loop
+_pmc_extra_done:
+    bl _tok_advance              // skip ")"
+
+    // pop args into registers (same as blind call multi-arg path)
+    cmp w25, #1
+    b.ne _pmc_multi
+    // single arg: rewind push, value already in x0
+    adrp x0, _out_pos@PAGE
+    add x0, x0, _out_pos@PAGEOFF
+    ldr x1, [x0]
+    sub x1, x1, #24
+    str x1, [x0]
+    b _pmc_emit_call
+_pmc_multi:
+    mov w0, w25
+    sub w0, w0, #1
+_pmc_pop:
+    cmp w0, #0
+    b.lt _pmc_emit_call
+    stp x0, x1, [sp, #-16]!
+    adrp x0, _efc_ldr_x@PAGE
+    add x0, x0, _efc_ldr_x@PAGEOFF
+    bl _emit_str
+    ldp x0, x1, [sp], #16
+    stp x0, x1, [sp, #-16]!
+    bl _emit_num
+    adrp x0, _efc_pop_suf@PAGE
+    add x0, x0, _efc_pop_suf@PAGEOFF
+    bl _emit_str
+    ldp x0, x1, [sp], #16
+    sub w0, w0, #1
+    b _pmc_pop
+_pmc_emit_call:
+    // emit: bl _uf_<method_name>
+    adrp x0, _fg_bl_uf@PAGE
+    add x0, x0, _fg_bl_uf@PAGEOFF
+    bl _emit_str
+    mov x0, x20
+    mov x1, x21
+    bl _emit_raw
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
     mov x0, #0
     b _pfac_ret
 
@@ -3257,14 +3360,59 @@ _pfac_arr_read:
     b _pfac_ret
 
 _pfac_undef:
+    // v1.0: check if this is a function name used as value (function pointer)
+    mov x0, x19
+    mov x1, x20
+    bl _fn_lookup
+    cbnz x0, _pfac_fn_ptr
     bl _tok_line
     mov x1, x0
     adrp x0, _err_undef@PAGE
     add x0, x0, _err_undef@PAGEOFF
     bl _err_line
+_pfac_fn_ptr:
+    // x19 = fn name_ptr, w20 = fn name_len
+    // emit: adrp x0, _uf_<name>@PAGE / add x0, x0, _uf_<name>@PAGEOFF
+    adrp x0, _fg_adrp_x0@PAGE
+    add x0, x0, _fg_adrp_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_fn_uf@PAGE
+    add x0, x0, _fg_fn_uf@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    mov x1, x20
+    bl _emit_raw
+    adrp x0, _fg_page@PAGE
+    add x0, x0, _fg_page@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_add_x0@PAGE
+    add x0, x0, _fg_add_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_fn_uf@PAGE
+    add x0, x0, _fg_fn_uf@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    mov x1, x20
+    bl _emit_raw
+    adrp x0, _fg_poff@PAGE
+    add x0, x0, _fg_poff@PAGEOFF
+    bl _emit_str
+    // clear optimization flags
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
 _pfac_err:
     mov x0, #-1
 _pfac_ret:
+    ldp x25, x26, [sp], #16
+    ldp x23, x24, [sp], #16
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret
@@ -3453,7 +3601,9 @@ _emit_fn_call:
 
     // lookup function
     bl _fn_lookup
-    cbz x0, _efc_undef
+    cbnz x0, _efc_found
+    b _efc_undef
+_efc_found:
     ldr w21, [x0, #12]          // expected param_count
 
     // expect "("
@@ -3528,6 +3678,12 @@ _efc_pop_args:
     b _efc_pop_args
 
 _efc_emit_call:
+    // check if this is an indirect call (function pointer)
+    adrp x1, _efc_is_indirect@PAGE
+    add x1, x1, _efc_is_indirect@PAGEOFF
+    ldr w2, [x1]
+    str wzr, [x1]                // clear flag
+    cbnz w2, _efc_emit_indirect
     // check if this is an extern C call
     adrp x1, _efc_is_extern@PAGE
     add x1, x1, _efc_is_extern@PAGEOFF
@@ -3555,12 +3711,42 @@ _efc_emit_name:
     mov x0, #0
     b _efc_ret
 
+_efc_emit_indirect:
+    // load function pointer from variable into x9, then blr x9
+    // (x0 may hold last arg value, so use x9)
+    adrp x0, _efc_indirect_off@PAGE
+    add x0, x0, _efc_indirect_off@PAGEOFF
+    ldr w0, [x0]
+    // emit: ldr x9, [x29, #-<offset>]
+    adrp x1, _fg_ldr_x9@PAGE
+    add x1, x1, _fg_ldr_x9@PAGEOFF
+    stp x0, x30, [sp, #-16]!
+    mov x0, x1
+    bl _emit_str
+    ldp x0, x30, [sp], #16
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
+    bl _emit_str
+    // emit: blr x9
+    adrp x0, _fg_blr_x9@PAGE
+    add x0, x0, _fg_blr_x9@PAGEOFF
+    bl _emit_str
+    mov x0, #0
+    b _efc_ret
+
 _efc_undef:
     // check extern table first
     mov x0, x19
     mov x1, x20
     bl _ext_lookup
     cbnz x0, _efc_extern_call
+
+    // v1.0: check if this is a variable (function pointer indirect call)
+    mov x0, x19
+    mov x1, x20
+    bl _sym_lookup
+    cbnz x0, _efc_indirect_call
 
     // check if imports exist — if so, trust the linker
     adrp x0, _import_count@PAGE
@@ -3628,6 +3814,19 @@ _efc_blind_pop:
     ldp x0, x1, [sp], #16
     sub w0, w0, #1
     b _efc_blind_pop
+
+_efc_indirect_call:
+    // x0 = sym entry ptr (variable holding function pointer)
+    // Save the variable offset for later blr emission
+    ldr w0, [x0, #16]           // variable offset
+    adrp x1, _efc_indirect_off@PAGE
+    add x1, x1, _efc_indirect_off@PAGEOFF
+    str w0, [x1]
+    adrp x1, _efc_is_indirect@PAGE
+    add x1, x1, _efc_is_indirect@PAGEOFF
+    mov w2, #1
+    str w2, [x1]
+    b _efc_blind_call_args
 
 _efc_extern_call:
     // set extern flag, then reuse blind call arg parsing
@@ -4888,3 +5087,6 @@ _struct_field_idx:
 .section __DATA,__bss
 .globl _efc_is_extern
 _efc_is_extern: .space 4
+.globl _efc_is_indirect, _efc_indirect_off
+_efc_is_indirect: .space 4
+_efc_indirect_off: .space 4

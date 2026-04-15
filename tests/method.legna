@@ -1,0 +1,24 @@
+struct point:
+    x
+    y
+
+fn magnitude(px, py):
+    return px * px + py * py
+
+fn sum3(a, b, c):
+    return a + b + c
+
+struct vec3:
+    x
+    y
+    z
+
+legna:
+    let p = point(3, 4)
+    output p.magnitude()
+    output " "
+    let q = point(5, 12)
+    output q.magnitude()
+    output " "
+    let v = vec3(10, 20, 30)
+    output v.sum3()
