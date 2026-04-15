@@ -121,6 +121,7 @@ run_test "import_check" "tests/import_check.legna" "$(printf '11/11')"
 run_test "import_hash" "tests/import_hash.legna" "$(printf '1\n1\n1\n1')"
 run_test "ffi_libc" "tests/ffi_libc.legna" "$(printf '42 5 1')"
 run_test "ffi_mixed" "tests/ffi_mixed.legna" "$(printf '42 5 4 1')"
+run_test "struct" "tests/struct.legna" "$(printf '25 30 100 120')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"

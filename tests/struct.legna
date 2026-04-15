@@ -1,0 +1,22 @@
+struct point:
+    x
+    y
+
+struct rect:
+    x
+    y
+    w
+    h
+
+legna:
+    let p = point(3, 4)
+    output p.x * p.x + p.y * p.y
+    output " "
+    p.x = 30
+    output p.x
+    output " "
+    let r = rect(0, 0, 100, 50)
+    output r.w
+    output " "
+    r.w = r.w + 20
+    output r.w

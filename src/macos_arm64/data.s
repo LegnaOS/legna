@@ -35,6 +35,7 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_len, _kw_char_at, _kw_to_str, _kw_to_num
 .globl _kw_import
 .globl _kw_extern, _kw_link
+.globl _kw_struct
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -71,6 +72,7 @@ _kw_to_num:    .asciz "to_num"
 _kw_import:    .asciz "import"
 _kw_extern:    .asciz "extern"
 _kw_link:      .asciz "link"
+_kw_struct:    .asciz "struct"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -274,6 +276,7 @@ _fg_nl_err:     .asciz "\n"
 .globl _lib_o_paths, _lib_o_count, _lib_path_buf, _main_o_path
 .globl _ext_tab, _ext_count
 .globl _link_tab, _link_count
+.globl _struct_tab, _struct_count
 .globl _last_is_imm, _last_imm_val, _last_imm_out_pos
 .globl _last_is_var, _last_var_offset, _last_var_out_pos
 
@@ -325,3 +328,7 @@ _ext_tab:          .space 768      // 32 entries * 24 bytes (name_ptr(8) + name_
 _ext_count:        .space 4
 _link_tab:         .space 1024     // 16 entries * 64 bytes (pre-built "-l<name>" strings)
 _link_count:       .space 4
+// struct descriptor table: 16 structs × 192 bytes
+// layout per entry: name_ptr(8) + name_len(4) + field_count(4) + fields[11](name_ptr(8)+name_len(4)+pad(4))
+_struct_tab:       .space 3072
+_struct_count:     .space 4

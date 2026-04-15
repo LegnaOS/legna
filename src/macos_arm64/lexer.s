@@ -477,16 +477,26 @@ _op_dot:
     b.ne _lex_err
     add x4, x20, #1
     cmp x4, x21
-    b.ge _lex_err
+    b.ge _op_single_dot
     ldrb w5, [x19, x4]
     cmp w5, #'.'
-    b.ne _lex_err
+    b.ne _op_single_dot
+    // ".." → TOK_DOTDOT
     mov w0, #TOK_DOTDOT
     mov x1, #2
     add x2, x19, x20
     mov x3, #0
     bl _lex_add_tok
     add x20, x20, #2
+    b _lex_loop
+_op_single_dot:
+    // "." → TOK_DOT
+    mov w0, #TOK_DOT
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
     b _lex_loop
 
 // ── EOF handling ──
@@ -1055,13 +1065,24 @@ _mk_try_extern:
 _mk_try_link:
     // "link" (4)
     cmp x20, #4
-    b.ne _mk_ident
+    b.ne _mk_try_struct
     mov x0, x19
     adrp x1, _kw_link@PAGE
     add x1, x1, _kw_link@PAGEOFF
     mov x2, #4
     bl _strncmp
     cbz x0, _mk_link
+
+_mk_try_struct:
+    // "struct" (6)
+    cmp x20, #6
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_struct@PAGE
+    add x1, x1, _kw_struct@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_struct
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -1173,6 +1194,9 @@ _mk_extern:
     b _mk_ret
 _mk_link:
     mov w0, #TOK_KW_LINK
+    b _mk_ret
+_mk_struct:
+    mov w0, #TOK_KW_STRUCT
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

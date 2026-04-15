@@ -171,6 +171,8 @@ _sym_insert:
     ldr w3, [x0]
     cmp w21, #TY_ARR
     b.eq 3f
+    cmp w21, #TY_STRUCT
+    b.eq 3f
     cmp w21, #TY_STR
     b.eq 1f
     add w3, w3, #8              // int = 8 bytes
@@ -869,12 +871,22 @@ _pp_parse_link:
 
 _pp_decl_done:
 
-    // parse fn definitions before legna:
+    // parse fn and struct definitions before legna:
 _pp_fn_loop:
     bl _tok_peek
     cmp w0, #TOK_KW_FN
-    b.ne _pp_fn_done
+    b.eq _pp_parse_fn
+    cmp w0, #TOK_KW_STRUCT
+    b.eq _pp_parse_struct_def
+    b _pp_fn_done
+_pp_parse_fn:
     bl _parse_fn
+    cmp x0, #0
+    b.lt _pp_err
+    bl _skip_nl
+    b _pp_fn_loop
+_pp_parse_struct_def:
+    bl _parse_struct_def
     cmp x0, #0
     b.lt _pp_err
     bl _skip_nl
@@ -1105,7 +1117,25 @@ _parse_let:
     // v0.7: check for array() → TY_ARR
     cmp w0, #TOK_KW_ARRAY
     b.eq _pl_arr_init
+    // v1.0: check for struct constructor — IDENT followed by "("
+    cmp w0, #TOK_IDENT
+    b.eq _pl_check_struct
+    b _pl_not_struct
+_pl_check_struct:
+    // peek at the identifier — is it a struct name?
+    bl _tok_current
+    ldr x0, [x0, #8]            // rhs name_ptr
+    stp x0, x30, [sp, #-16]!
+    bl _tok_current
+    ldr w1, [x0, #4]            // rhs name_len
+    ldp x0, x30, [sp], #16
+    stp x0, x1, [sp, #-16]!     // save rhs name_ptr, name_len
+    bl _struct_lookup
+    ldp x1, x2, [sp], #16       // restore (unused, but balance stack)
+    cbnz x0, _pl_struct_init
+_pl_not_struct:
     // v0.5: check for spawn: → fork block
+    bl _tok_peek
     cmp w0, #TOK_KW_SPAWN
     b.eq _pl_spawn
     // insert symbol
@@ -1339,6 +1369,55 @@ _pl_nl:
     bl _skip_nl
     mov x0, #0
     b _pl_ret
+
+_pl_struct_init:
+    // x0 = struct descriptor ptr from _struct_lookup
+    // x19 = var name_ptr, w20 = var name_len
+    mov x22, x0                 // save descriptor ptr
+    ldr w21, [x22, #12]         // field_count
+    // insert symbol as TY_STRUCT with field_count elements
+    mov x0, x19
+    mov x1, x20
+    mov w2, #TY_STRUCT
+    mov w3, w21
+    bl _sym_insert
+    str x22, [x0, #24]          // store descriptor ptr in sym entry
+    mov x19, x0                 // save sym entry ptr
+    bl _tok_advance              // skip struct name token
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pl_err
+    // parse field initializers
+    ldr w20, [x19, #16]         // struct base offset
+    mov w22, #0                  // field index
+_pl_si_loop:
+    cmp w22, w21
+    b.ge _pl_si_done
+    cbz w22, _pl_si_parse
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pl_err
+_pl_si_parse:
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pl_err
+    // field i at [x29, #-(base - i*8)]
+    ldr w0, [x19, #16]
+    mov w1, w22
+    lsl w1, w1, #3
+    sub w0, w0, w1
+    bl _emit_store_var
+    add w22, w22, #1
+    b _pl_si_loop
+_pl_si_done:
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pl_err
+    b _pl_nl
+
 _pl_err:
     mov x0, #-1
 _pl_ret:
@@ -1377,6 +1456,10 @@ _parse_assign:
     bl _tok_peek
     cmp w0, #TOK_LBRACKET
     b.eq _pa_arr_write
+
+    // v1.0: check if struct field write: s.field = expr
+    cmp w0, #TOK_DOT
+    b.eq _pa_struct_write
 
     // check token: = or += -= *=
     bl _tok_peek
@@ -1473,6 +1556,44 @@ _pa_aug_mul:
     ldr w0, [x19, #16]
     bl _emit_store_var
     bl _skip_nl
+    mov x0, #0
+    b _pa_ret
+
+_pa_struct_write:
+    // x19 = sym entry ptr (TY_STRUCT)
+    bl _tok_advance              // skip "."
+    // get field name
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _pa_err
+    bl _tok_current
+    ldr x0, [x0, #8]            // field name_ptr
+    stp x0, x30, [sp, #-16]!
+    bl _tok_current
+    ldr w1, [x0, #4]            // field name_len
+    ldp x0, x30, [sp], #16
+    stp x0, x1, [sp, #-16]!     // save field name_ptr, name_len
+    bl _tok_advance              // skip field name
+    // expect "="
+    mov w0, #TOK_ASSIGN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pa_err
+    // parse expr
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pa_err
+    // resolve field index
+    ldp x1, x2, [sp], #16       // field name_ptr, name_len
+    ldr x0, [x19, #24]          // struct descriptor ptr
+    bl _struct_field_idx
+    cmp w0, #0
+    b.lt _pa_err
+    // compute offset: base - field_idx * 8
+    ldr w1, [x19, #16]
+    lsl w0, w0, #3
+    sub w0, w1, w0
+    bl _emit_store_var
     mov x0, #0
     b _pa_ret
 
@@ -2551,6 +2672,10 @@ _pfac_ident:
     cmp w1, #TY_ARR
     b.eq _pfac_arr_read
 
+    // v1.0: check if struct type
+    cmp w1, #TY_STRUCT
+    b.eq _pfac_struct_read
+
     ldr w19, [x0, #16]          // offset (reuse x19, done with name)
     // set _last_is_var flag
     adrp x0, _last_is_var@PAGE
@@ -3036,6 +3161,44 @@ _pfac_neg:
     b _pfac_ret
 
 // v0.7: array index read — arr[i]
+_pfac_struct_read:
+    // x0 = sym entry ptr, type is TY_STRUCT
+    mov x19, x0                 // save sym entry
+    // expect "."
+    bl _tok_peek
+    cmp w0, #TOK_DOT
+    b.ne _pfac_err
+    bl _tok_advance              // skip "."
+    // get field name
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _pfac_err
+    bl _tok_current
+    ldr x20, [x0, #8]           // field name_ptr
+    ldr w21, [x0, #4]           // field name_len
+    bl _tok_advance              // skip field name
+    // resolve field index
+    ldr x0, [x19, #24]          // struct descriptor ptr
+    mov x1, x20
+    mov w2, w21
+    bl _struct_field_idx
+    cmp w0, #0
+    b.lt _pfac_err               // field not found
+    // compute offset: base - field_idx * 8
+    ldr w1, [x19, #16]          // struct base offset
+    lsl w0, w0, #3              // field_idx * 8
+    sub w0, w1, w0              // base - field_idx * 8
+    // clear optimization flags
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    bl _emit_load_var
+    mov x0, #0
+    b _pfac_ret
+
 _pfac_arr_read:
     // x0 = entry ptr
     ldr w19, [x0, #16]          // offset
@@ -4535,7 +4698,193 @@ _la_done:
     ldp x29, x30, [sp], #16
     ret
 
-// _efc_is_extern: flag for C call emit path
+// ────────────────────────────────────────
+// Struct support
+// ────────────────────────────────────────
+.section __TEXT,__text
+.align 2
+
+// _parse_struct_def: parse "struct Name:\n    field1\n    field2\n"
+// Registers struct in _struct_tab. No code emitted.
+.globl _parse_struct_def
+_parse_struct_def:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+
+    bl _tok_advance              // skip "struct"
+    // get struct name
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _psd_err
+    bl _tok_current
+    ldr x19, [x0, #8]           // name_ptr
+    ldr w20, [x0, #4]           // name_len
+    bl _tok_advance              // skip name
+    // expect ":"
+    mov w0, #TOK_COLON
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _psd_err
+    bl _skip_nl
+
+    // allocate struct descriptor entry
+    adrp x0, _struct_count@PAGE
+    add x0, x0, _struct_count@PAGEOFF
+    ldr w21, [x0]               // struct index
+    adrp x1, _struct_tab@PAGE
+    add x1, x1, _struct_tab@PAGEOFF
+    mov x2, #192
+    mul x2, x21, x2
+    add x22, x1, x2             // entry ptr
+
+    // store name
+    str x19, [x22]              // name_ptr
+    str w20, [x22, #8]          // name_len
+
+    // parse fields (indented block)
+    mov w21, #0                  // field_count
+_psd_field_loop:
+    bl _tok_peek
+    // skip NL and INDENT tokens
+    cmp w0, #TOK_NL
+    b.eq _psd_skip_tok
+    cmp w0, #TOK_INDENT
+    b.eq _psd_skip_tok
+    b _psd_check_field
+_psd_skip_tok:
+    bl _tok_advance
+    b _psd_field_loop
+_psd_check_field:
+    cmp w0, #TOK_DEDENT
+    b.eq _psd_fields_done
+    cmp w0, #TOK_EOF
+    b.eq _psd_fields_done
+    cmp w0, #TOK_IDENT
+    b.ne _psd_err
+    // get field name
+    bl _tok_current
+    ldr x1, [x0, #8]            // field name_ptr
+    ldr w2, [x0, #4]            // field name_len
+    // store in descriptor: fields start at offset 16, each 16 bytes
+    mov x3, #16
+    mul x3, x21, x3
+    add x3, x3, #16             // skip header
+    add x3, x22, x3             // field entry ptr
+    str x1, [x3]                // field name_ptr
+    str w2, [x3, #8]            // field name_len
+    add w21, w21, #1
+    bl _tok_advance              // skip field name
+    bl _skip_nl
+    b _psd_field_loop
+
+_psd_fields_done:
+    // skip DEDENT
+    bl _tok_peek
+    cmp w0, #TOK_DEDENT
+    b.ne 1f
+    bl _tok_advance
+1:
+    // store field_count
+    str w21, [x22, #12]
+
+    // increment struct_count
+    adrp x0, _struct_count@PAGE
+    add x0, x0, _struct_count@PAGEOFF
+    ldr w1, [x0]
+    add w1, w1, #1
+    str w1, [x0]
+
+    mov x0, #0
+    b _psd_ret
+_psd_err:
+    mov x0, #-1
+_psd_ret:
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _struct_lookup: x0=name_ptr, x1=name_len → x0=descriptor ptr or 0
+.globl _struct_lookup
+_struct_lookup:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    mov x19, x0
+    mov x20, x1
+    adrp x21, _struct_tab@PAGE
+    add x21, x21, _struct_tab@PAGEOFF
+    adrp x0, _struct_count@PAGE
+    add x0, x0, _struct_count@PAGEOFF
+    ldr w22, [x0]
+    mov x0, #0
+1:  cmp w0, w22
+    b.ge 2f
+    mov x1, #192
+    mul x1, x0, x1
+    add x2, x21, x1             // entry ptr
+    ldr x3, [x2]                // entry name_ptr
+    ldr w4, [x2, #8]            // entry name_len
+    cmp w4, w20
+    b.ne 3f
+    stp x0, x2, [sp, #-16]!
+    mov x0, x19
+    mov x1, x3
+    mov x2, x20
+    bl _strncmp
+    mov x3, x0
+    ldp x0, x2, [sp], #16
+    cbz x3, 4f
+3:  add x0, x0, #1
+    b 1b
+2:  mov x0, #0
+    b 5f
+4:  mov x0, x2                  // return descriptor ptr
+5:  ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _struct_field_idx: x0=descriptor_ptr, x1=field_name_ptr, w2=field_name_len → w0=index or -1
+.globl _struct_field_idx
+_struct_field_idx:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+    mov x19, x0                 // descriptor
+    mov x20, x1                 // field name
+    mov w21, w2                  // field name len
+    ldr w22, [x19, #12]         // field_count
+    mov w0, #0
+1:  cmp w0, w22
+    b.ge 2f
+    // field entry at descriptor + 16 + index * 16
+    mov x1, #16
+    mul x1, x0, x1
+    add x1, x1, #16
+    add x1, x19, x1
+    ldr x3, [x1]                // field name_ptr
+    ldr w4, [x1, #8]            // field name_len
+    cmp w4, w21
+    b.ne 3f
+    stp x0, x1, [sp, #-16]!
+    mov x0, x20
+    mov x1, x3
+    mov x2, x21
+    bl _strncmp
+    mov x3, x0
+    ldp x0, x1, [sp], #16
+    cbz x3, 4f
+3:  add w0, w0, #1
+    b 1b
+2:  mov w0, #-1                 // not found
+4:  // w0 = field index (or -1)
+    ldp x21, x22, [sp], #16
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
 .section __DATA,__bss
 .globl _efc_is_extern
 _efc_is_extern: .space 4
