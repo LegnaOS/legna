@@ -75,6 +75,7 @@ _kw_link:      .asciz "link"
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
 .globl _lnk_e, _lnk_main, _lnk_arch, _lnk_arm64, _lnk_dead, _lnk_x
+.globl _lnk_lbrew
 _path_as:      .asciz "/usr/bin/as"
 _path_ld:      .asciz "/usr/bin/ld"
 _tmp_prefix:   .asciz "/tmp/legna_"
@@ -90,6 +91,7 @@ _lnk_arch:     .asciz "-arch"
 _lnk_arm64:    .asciz "arm64"
 _lnk_dead:     .asciz "-dead_strip"
 _lnk_x:        .asciz "-x"
+_lnk_lbrew:    .asciz "-L/opt/homebrew/lib"
 
 // ── Codegen fragments ──
 .globl _fg_hdr, _fg_text, _fg_data, _fg_bss, _fg_nl, _fg_comma

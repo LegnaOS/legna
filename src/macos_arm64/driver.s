@@ -408,7 +408,13 @@ _rlm_lib_loop:
     b _rlm_lib_loop
 _rlm_lib_done:
 
-    // add link library args (-l<name>)
+    // add -L/opt/homebrew/lib for homebrew libraries
+    adrp x0, _lnk_lbrew@PAGE
+    add x0, x0, _lnk_lbrew@PAGEOFF
+    str x0, [sp, x19, lsl #3]
+    add x19, x19, #1
+
+    // add link library args (-l<name> or .o paths)
     adrp x1, _link_count@PAGE
     add x1, x1, _link_count@PAGEOFF
     ldr w1, [x1]

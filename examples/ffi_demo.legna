@@ -1,0 +1,78 @@
+# Legna FFI Demo: C + C++ + Lua
+#
+# 编译方式：
+#   clang -c examples/mylib.c -o /tmp/mylib_c.o
+#   clang++ -c examples/mylib.cpp -o /tmp/mylib_cpp.o
+#   ./legnac examples/ffi_demo.legna -o ffi_demo
+
+# === C 函数 ===
+extern fn c_add(a, b)
+extern fn c_factorial(n)
+extern fn c_strlen(s)
+extern fn c_hello()
+
+# === C++ 函数（extern "C" 导出）===
+extern fn cpp_square(x)
+extern fn cpp_fib(n)
+extern fn cpp_greet(name)
+
+# === Lua C API ===
+extern fn luaL_newstate()
+extern fn lua_openlibs_wrap(state)
+extern fn lua_dostring_wrap(state, code)
+extern fn lua_close(state)
+
+# === 链接 ===
+link "/tmp/mylib_c.o"
+link "/tmp/mylib_cpp.o"
+link "/tmp/lua_wrap.o"
+link "lua"
+link "c++"
+
+# === Legna 标准库 ===
+import "math"
+
+legna:
+    output "========== Legna FFI Demo ==========\n"
+
+    # --- C ---
+    c_hello()
+    output "[C] c_add(17, 25) = "
+    output c_add(17, 25)
+    output "\n"
+    output "[C] c_factorial(10) = "
+    output c_factorial(10)
+    output "\n"
+    output "[C] c_strlen(\"Legna\") = "
+    output c_strlen("Legna")
+    output "\n"
+
+    # --- C++ ---
+    cpp_greet("Legna")
+    output "[C++] cpp_square(12) = "
+    output cpp_square(12)
+    output "\n"
+    output "[C++] cpp_fib(20) = "
+    output cpp_fib(20)
+    output "\n"
+
+    # --- Lua ---
+    let state = luaL_newstate()
+    lua_openlibs_wrap(state)
+    lua_dostring_wrap(state, "print('[Lua] hello from Lua 5.5!')")
+    lua_dostring_wrap(state, "print('[Lua] 2^10 = ' .. tostring(2^10))")
+    lua_dostring_wrap(state, "for i=1,5 do io.write('[Lua] fib('..i..') ') end; print()")
+    lua_close(state)
+
+    # --- Legna 标准库 ---
+    output "[Legna] pow(2, 16) = "
+    output pow(2, 16)
+    output "\n"
+    output "[Legna] gcd(144, 60) = "
+    output gcd(144, 60)
+    output "\n"
+    output "[Legna] is_prime(997) = "
+    output is_prime(997)
+    output "\n"
+
+    output "====================================\n"

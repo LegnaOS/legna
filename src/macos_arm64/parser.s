@@ -745,6 +745,12 @@ _pp_scan_done:
     str wzr, [x0]
 
     // parse import, extern fn, and link directives (any order)
+    // only reset ext/link counts if not in lib mode (lib files are compiled
+    // after the main file, and we must preserve the main file's extern/link state)
+    adrp x0, _is_lib_mode@PAGE
+    add x0, x0, _is_lib_mode@PAGEOFF
+    ldr w0, [x0]
+    cbnz w0, _pp_decl_loop
     adrp x0, _ext_count@PAGE
     add x0, x0, _ext_count@PAGEOFF
     str wzr, [x0]
@@ -4471,7 +4477,7 @@ _ext_lookup:
     ldp x29, x30, [sp], #16
     ret
 
-// _link_add: x1=name_ptr, w2=name_len — store lib name for linker
+// _link_add: x1=name_ptr, w2=name_len — store lib name or .o path for linker
 .globl _link_add
 _link_add:
     stp x29, x30, [sp, #-16]!
@@ -4486,6 +4492,28 @@ _link_add:
     mov x3, #64
     mul x3, x1, x3
     add x2, x2, x3              // dest slot
+    // check if ends with ".o" — if so, copy path directly
+    cmp w20, #2
+    b.lt _la_lib                 // too short for ".o"
+    sub w3, w20, #2
+    ldrb w4, [x19, x3]
+    cmp w4, #'.'
+    b.ne _la_lib
+    sub w3, w20, #1
+    ldrb w4, [x19, x3]
+    cmp w4, #'o'
+    b.ne _la_lib
+    // .o file: copy path directly
+    mov x5, #0
+1:  cmp w5, w20
+    b.ge 2f
+    ldrb w6, [x19, x5]
+    strb w6, [x2, x5]
+    add x5, x5, #1
+    b 1b
+2:  strb wzr, [x2, x5]
+    b _la_done
+_la_lib:
     // build "-l<name>"
     mov w3, #'-'
     strb w3, [x2]
@@ -4493,13 +4521,14 @@ _link_add:
     strb w3, [x2, #1]
     add x4, x2, #2
     mov x5, #0
-1:  cmp w5, w20
-    b.ge 2f
+3:  cmp w5, w20
+    b.ge 4f
     ldrb w6, [x19, x5]
     strb w6, [x4, x5]
     add x5, x5, #1
-    b 1b
-2:  strb wzr, [x4, x5]
+    b 3b
+4:  strb wzr, [x4, x5]
+_la_done:
     add w1, w1, #1
     str w1, [x0]
     ldp x19, x20, [sp], #16
