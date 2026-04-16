@@ -1,0 +1,14 @@
+legna:
+    output 5 & 3
+    output " "
+    output 5 | 3
+    output " "
+    output 5 ^ 3
+    output " "
+    output ~0
+    output " "
+    output 1 << 4
+    output " "
+    output 32 >> 3
+    output " "
+    output (255 & 240) >> 4

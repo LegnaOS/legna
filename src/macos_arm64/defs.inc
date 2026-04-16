@@ -111,6 +111,19 @@
 .equ TOK_KW_STRUCT, 65
 .equ TOK_DOT,       66
 
+// v1.1: Bitwise operators
+.equ TOK_AMP,       67    // &
+.equ TOK_PIPE_OP,   68    // |
+.equ TOK_CARET,     69    // ^
+.equ TOK_TILDE,     70    // ~
+.equ TOK_SHL,       71    // <<
+.equ TOK_SHR,       72    // >>
+
+// v1.1: switch/case
+.equ TOK_KW_SWITCH,  73
+.equ TOK_KW_CASE,    74
+.equ TOK_KW_DEFAULT, 75
+
 // Symbol types
 .equ TY_INT,        0
 .equ TY_STR,        1

@@ -1,0 +1,23 @@
+legna:
+    let x = 2
+    switch x:
+        case 1:
+            output "one"
+        case 2:
+            output "two"
+        case 3:
+            output "three"
+        default:
+            output "other"
+    output " "
+    switch 99:
+        case 1:
+            output "a"
+        default:
+            output "default"
+    output " "
+    switch 1 + 2:
+        case 3:
+            output "expr"
+        default:
+            output "fail"

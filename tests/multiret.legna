@@ -1,0 +1,18 @@
+fn divmod(a, b):
+    return a / b, a % b
+
+fn minmax(a, b):
+    if a < b:
+        return a, b
+    return b, a
+
+legna:
+    let q, r = divmod(17, 5)
+    output q
+    output " "
+    output r
+    output " "
+    let lo, hi = minmax(42, 7)
+    output lo
+    output " "
+    output hi

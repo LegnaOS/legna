@@ -1057,8 +1057,12 @@ _parse_statement:
     bl _parse_send
     b _ps_ret
 15: cmp w0, #TOK_KW_RECV
-    b.ne 7f
+    b.ne 16f
     bl _parse_recv
+    b _ps_ret
+16: cmp w0, #TOK_KW_SWITCH
+    b.ne 7f
+    bl _parse_switch
     b _ps_ret
 7:  // unexpected token
     bl _tok_line
@@ -1090,6 +1094,11 @@ _parse_let:
     ldr x19, [x0, #8]           // name_ptr
     ldr w20, [x0, #4]           // name_len
     bl _tok_advance
+
+    // v1.1: check for multi-return: let a, b = fn()
+    bl _tok_peek
+    cmp w0, #TOK_COMMA
+    b.eq _pl_multi_ret
 
     // expect "="
     mov w0, #TOK_ASSIGN
@@ -1153,7 +1162,7 @@ _pl_not_struct:
     b.eq _pl_pipe_init
 
     // integer: parse expr, emit store
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pl_err
     ldr w0, [x22, #16]          // offset
@@ -1234,7 +1243,7 @@ _pl_str_init:
 
 _pl_str_input:
     // input_str()
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pl_err
     // after input_str, x0=len in generated code
@@ -1253,7 +1262,7 @@ _pl_str_input:
 // v0.5: let p = pipe()
 _pl_pipe_init:
     // pipe() returns read_fd in x0, write_fd in x1
-    bl _parse_expr               // emits bl _rt_pipe
+    bl _parse_bitor               // emits bl _rt_pipe
     cmp x0, #0
     b.lt _pl_err
     // store read_fd (x0) at offset
@@ -1370,6 +1379,56 @@ _pl_nl:
     mov x0, #0
     b _pl_ret
 
+_pl_multi_ret:
+    // x19 = first var name_ptr, w20 = first var name_len
+    bl _tok_advance              // skip ","
+    // get second ident
+    bl _tok_peek
+    cmp w0, #TOK_IDENT
+    b.ne _pl_err
+    bl _tok_current
+    ldr x21, [x0, #8]           // name2_ptr
+    ldr w22, [x0, #4]           // name2_len
+    bl _tok_advance
+    // expect "="
+    mov w0, #TOK_ASSIGN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pl_err
+    // insert first symbol
+    stp x21, x22, [sp, #-16]!   // save name2
+    mov x0, x19
+    mov x1, x20
+    mov w2, #TY_INT
+    mov w3, #0
+    bl _sym_insert
+    mov x19, x0                 // entry1 ptr
+    ldp x21, x22, [sp], #16     // restore name2
+    // insert second symbol
+    mov x0, x21
+    mov x1, x22
+    mov w2, #TY_INT
+    mov w3, #0
+    bl _sym_insert
+    mov x21, x0                 // entry2 ptr
+    // parse expression (function call that returns x0, x1)
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pl_err
+    // store x0 → first var
+    ldr w0, [x19, #16]
+    bl _emit_store_var
+    // store x1 → second var: str x1, [x29, #-offset]
+    adrp x0, _fg_str_x1@PAGE
+    add x0, x0, _fg_str_x1@PAGEOFF
+    bl _emit_str
+    ldr w0, [x21, #16]
+    bl _emit_num
+    adrp x0, _fg_cb@PAGE
+    add x0, x0, _fg_cb@PAGEOFF
+    bl _emit_str
+    b _pl_nl
+
 _pl_struct_init:
     // x0 = struct descriptor ptr from _struct_lookup
     // x19 = var name_ptr, w20 = var name_len
@@ -1400,7 +1459,7 @@ _pl_si_loop:
     cmp x0, #0
     b.lt _pl_err
 _pl_si_parse:
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pl_err
     // field i at [x29, #-(base - i*8)]
@@ -1477,7 +1536,7 @@ _parse_assign:
     b.lt _pa_err
 
     // parse expr
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
 
@@ -1498,7 +1557,7 @@ _pa_aug_add:
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
     // parse rhs
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
     // pop old value into x1, add
@@ -1522,7 +1581,7 @@ _pa_aug_sub:
     adrp x0, _fg_push@PAGE
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
     adrp x0, _fg_pop1@PAGE
@@ -1544,7 +1603,7 @@ _pa_aug_mul:
     adrp x0, _fg_push@PAGE
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
     adrp x0, _fg_pop1@PAGE
@@ -1580,7 +1639,7 @@ _pa_struct_write:
     cmp x0, #0
     b.lt _pa_err
     // parse expr
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
     // resolve field index
@@ -1608,7 +1667,7 @@ _pa_arr_write:
     // advance past [
     bl _tok_advance
     // parse index expression → x0
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
     // push index onto stack
@@ -1626,7 +1685,7 @@ _pa_arr_write:
     cmp x0, #0
     b.lt _pa_err
     // parse value expression → x0
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pa_err
     // emit: mov x2, x0 (save value)
@@ -1732,7 +1791,7 @@ _po_check_ident:
     b.eq _po_str_var
 
     // integer variable: parse as expression (handles x+1 etc)
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _po_err
     adrp x0, _fg_itoa_call@PAGE
@@ -1769,7 +1828,7 @@ _po_str_var:
 
 _po_int_expr:
     // general expression → itoa → write
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _po_err
     adrp x0, _fg_itoa_call@PAGE
@@ -1799,7 +1858,7 @@ _parse_condition:
     stp x21, x22, [sp, #-16]!
 
     // left expr
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pc_err
 
@@ -1838,7 +1897,7 @@ _parse_condition:
 1:  bl _tok_advance
 
     // right expr
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pc_err
 
@@ -2157,7 +2216,7 @@ _parse_for:
     b.lt _pf_err
 
     // parse start expression
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pf_err
     // store start value to loop var
@@ -2171,7 +2230,7 @@ _parse_for:
     b.lt _pf_err
 
     // parse end expression
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pf_err
     // allocate hidden end-bound slot
@@ -2270,18 +2329,168 @@ _pf_ret:
     ret
 
 // ────────────────────────────────────────
-// Expression parsing: expr → term → factor
+// Expression parsing: bitor → bitxor → bitand → shift → expr(+/-) → term(*/) → factor
 // Result always in x0 of generated code
 // ────────────────────────────────────────
 
-// _parse_expr: term { (+|-) term }
+// _parse_bitor: bitxor { | bitxor }
+.globl _parse_bitor
+_parse_bitor:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    bl _parse_bitxor
+    cmp x0, #0
+    b.lt _pbor_err
+_pbor_loop:
+    bl _tok_peek
+    cmp w0, #TOK_PIPE_OP
+    b.ne _pbor_done
+    bl _tok_advance
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    bl _parse_bitxor
+    cmp x0, #0
+    b.lt _pbor_err
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_orr@PAGE
+    add x0, x0, _fg_orr@PAGEOFF
+    bl _emit_str
+    b _pbor_loop
+_pbor_done:
+    mov x0, #0
+    b _pbor_ret
+_pbor_err:
+    mov x0, #-1
+_pbor_ret:
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _parse_bitxor: bitand { ^ bitand }
+_parse_bitxor:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    bl _parse_bitand
+    cmp x0, #0
+    b.lt _pbxr_err
+_pbxr_loop:
+    bl _tok_peek
+    cmp w0, #TOK_CARET
+    b.ne _pbxr_done
+    bl _tok_advance
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    bl _parse_bitand
+    cmp x0, #0
+    b.lt _pbxr_err
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_eor@PAGE
+    add x0, x0, _fg_eor@PAGEOFF
+    bl _emit_str
+    b _pbxr_loop
+_pbxr_done:
+    mov x0, #0
+    b _pbxr_ret
+_pbxr_err:
+    mov x0, #-1
+_pbxr_ret:
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _parse_bitand: expr { & expr }
+_parse_bitand:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pba_err
+_pba_loop:
+    bl _tok_peek
+    cmp w0, #TOK_AMP
+    b.ne _pba_done
+    bl _tok_advance
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    bl _parse_expr
+    cmp x0, #0
+    b.lt _pba_err
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_and@PAGE
+    add x0, x0, _fg_and@PAGEOFF
+    bl _emit_str
+    b _pba_loop
+_pba_done:
+    mov x0, #0
+    b _pba_ret
+_pba_err:
+    mov x0, #-1
+_pba_ret:
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _parse_shift: term { (<<|>>) term }
+_parse_shift:
+    stp x29, x30, [sp, #-16]!
+    stp x19, x20, [sp, #-16]!
+    bl _parse_term
+    cmp x0, #0
+    b.lt _psh_err
+_psh_loop:
+    bl _tok_peek
+    cmp w0, #TOK_SHL
+    b.eq 1f
+    cmp w0, #TOK_SHR
+    b.eq 1f
+    b _psh_done
+1:  mov w19, w0
+    bl _tok_advance
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    bl _parse_term
+    cmp x0, #0
+    b.lt _psh_err
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    cmp w19, #TOK_SHL
+    b.ne 2f
+    adrp x0, _fg_lsl_op@PAGE
+    add x0, x0, _fg_lsl_op@PAGEOFF
+    b 3f
+2:  adrp x0, _fg_lsr_op@PAGE
+    add x0, x0, _fg_lsr_op@PAGEOFF
+3:  bl _emit_str
+    b _psh_loop
+_psh_done:
+    mov x0, #0
+    b _psh_ret
+_psh_err:
+    mov x0, #-1
+_psh_ret:
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// _parse_expr: shift { (+|-) shift }
 _parse_expr:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
     stp x19, x20, [sp, #-16]!
     stp x21, x22, [sp, #-16]!
 
-    bl _parse_term
+    bl _parse_shift
     cmp x0, #0
     b.lt _pe_err
 
@@ -2303,7 +2512,7 @@ _pe_loop:
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
     // parse right term
-    bl _parse_term
+    bl _parse_shift
     cmp x0, #0
     b.lt _pe_err
 
@@ -2887,7 +3096,7 @@ _pfac_rdline:
     bl _tok_expect
     cmp x0, #0
     b.lt _pfac_err
-    bl _parse_expr               // fd in x0
+    bl _parse_bitor               // fd in x0
     cmp x0, #0
     b.lt _pfac_err
     mov w0, #TOK_RPAREN
@@ -2919,7 +3128,7 @@ _pfac_wait:
     bl _tok_expect
     cmp x0, #0
     b.lt _pfac_err
-    bl _parse_expr               // pid in x0
+    bl _parse_bitor               // pid in x0
     cmp x0, #0
     b.lt _pfac_err
     mov w0, #TOK_RPAREN
@@ -2947,7 +3156,7 @@ _pfac_lparen:
     add x1, x1, _last_is_imm@PAGEOFF
     str wzr, [x1]
     bl _tok_advance
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pfac_err
     mov w0, #TOK_RPAREN
@@ -3041,7 +3250,7 @@ _pfac_char_at:
     cmp x0, #0
     b.lt _pfac_err
     // parse index expression → x0
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pfac_err
     // emit: mov x1, x0 (index → x1)
@@ -3079,7 +3288,7 @@ _pfac_to_str:
     cmp x0, #0
     b.lt _pfac_err
     // parse integer expression → x0
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pfac_err
     // emit: itoa call (x0=value → _itoa_buf, x0=length)
@@ -3099,7 +3308,7 @@ _pfac_to_str:
 // v0.7: to_num(s) — string to integer
 _pfac_to_num:
     cmp w0, #TOK_KW_TONUM
-    b.ne _pfac_neg
+    b.ne _pfac_bitnot
     adrp x1, _last_is_imm@PAGE
     add x1, x1, _last_is_imm@PAGEOFF
     str wzr, [x1]
@@ -3135,6 +3344,29 @@ _pfac_to_num:
     adrp x1, _last_is_var@PAGE
     add x1, x1, _last_is_var@PAGEOFF
     str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
+_pfac_bitnot:
+    // unary bitwise NOT
+    cmp w0, #TOK_TILDE
+    b.ne _pfac_neg
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    bl _parse_factor
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    adrp x0, _fg_mvn@PAGE
+    add x0, x0, _fg_mvn@PAGEOFF
+    bl _emit_str
     mov x0, #0
     b _pfac_ret
 
@@ -3248,7 +3480,7 @@ _pmc_extra_loop:
     cmp x0, #0
     b.lt _pfac_err
 _pmc_extra_parse:
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pfac_err
     adrp x0, _fg_push@PAGE
@@ -3316,7 +3548,7 @@ _pfac_arr_read:
     cmp x0, #0
     b.lt _pfac_err
     // parse index expression → x0
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pfac_err
     // expect ]
@@ -3625,7 +3857,7 @@ _efc_arg_loop:
     cmp x0, #0
     b.lt _efc_err
 _efc_parse_arg:
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _efc_err
     // push arg value onto stack (will pop into registers later)
@@ -3771,7 +4003,7 @@ _efc_blind_arg_loop:
     cmp x0, #0
     b.lt _efc_err
 _efc_blind_parse_arg:
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _efc_err
     adrp x0, _fg_push@PAGE
@@ -4111,10 +4343,31 @@ _pfn_ret:
 _parse_return:
     stp x29, x30, [sp, #-16]!
     bl _tok_advance              // skip "return"
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pret_err
-    // emit function epilogue + ret (result already in x0)
+    // check for multi-return: return a, b
+    bl _tok_peek
+    cmp w0, #TOK_COMMA
+    b.ne _pret_single
+    // multi-return: push first value, parse second → x0, then mov x1,x0; pop x0
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    bl _tok_advance              // skip ","
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pret_err
+    // emit: mov x1, x0 (second return value)
+    adrp x0, _fg_mov_x1_x0@PAGE
+    add x0, x0, _fg_mov_x1_x0@PAGEOFF
+    bl _emit_str
+    // emit: pop x0 (first return value)
+    adrp x0, _fg_pop0@PAGE
+    add x0, x0, _fg_pop0@PAGEOFF
+    bl _emit_str
+_pret_single:
+    // emit function epilogue + ret
     adrp x0, _fg_fn_epi@PAGE
     add x0, x0, _fg_fn_epi@PAGEOFF
     bl _emit_str
@@ -4210,7 +4463,7 @@ _parse_emit:
     add x0, x0, _fg_push@PAGEOFF
     bl _emit_str
     // parse value expression → x0 = int value
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pemit_err
     // mov x2, x0 (int value)
@@ -4390,7 +4643,7 @@ _parse_close:
     bl _tok_expect
     cmp x0, #0
     b.lt _pcl_err
-    bl _parse_expr               // fd in x0
+    bl _parse_bitor               // fd in x0
     cmp x0, #0
     b.lt _pcl_err
     mov w0, #TOK_RPAREN
@@ -4420,7 +4673,7 @@ _parse_write_line:
     bl _tok_advance              // skip "write_line"
 
     // parse fd expression
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pwl_err
     // push fd
@@ -4434,7 +4687,7 @@ _parse_write_line:
     b.eq _pwl_str
 
     // integer expression
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _pwl_err
     // itoa
@@ -4588,7 +4841,7 @@ _parse_send:
     mov x22, x0                 // key string index
 
     // parse value expression
-    bl _parse_expr
+    bl _parse_bitor
     cmp x0, #0
     b.lt _psnd_err
     // x0 = value — for now treat as integer, convert to string via itoa
@@ -4893,6 +5146,226 @@ _la_lib:
 _la_done:
     add w1, w1, #1
     str w1, [x0]
+    ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// ────────────────────────────────────────
+// switch/case support
+// ────────────────────────────────────────
+.section __TEXT,__text
+.align 2
+
+// _parse_switch: switch expr: case val: ... default: ...
+// Compiles to chained comparisons with branch-to-end after each case body.
+.globl _parse_switch
+_parse_switch:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    stp x19, x20, [sp, #-16]!
+    stp x21, x22, [sp, #-16]!
+
+    bl _tok_advance              // skip "switch"
+
+    // parse switch expression → x0
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _psw_err
+
+    // allocate hidden temp variable to hold switch value
+    adrp x0, _frame_size@PAGE
+    add x0, x0, _frame_size@PAGEOFF
+    ldr w19, [x0]
+    add w19, w19, #8
+    str w19, [x0]                // w19 = temp offset
+    mov w0, w19
+    bl _emit_store_var           // store switch value
+
+    // expect ":"
+    mov w0, #TOK_COLON
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _psw_err
+    bl _skip_nl
+
+    // allocate end label
+    bl _new_label
+    mov w20, w0                  // w20 = end_label
+
+    // skip INDENT if present
+    bl _tok_peek
+    cmp w0, #TOK_INDENT
+    b.ne _psw_case_loop
+    bl _tok_advance
+
+_psw_case_loop:
+    bl _tok_peek
+    cmp w0, #TOK_KW_CASE
+    b.eq _psw_parse_case
+    cmp w0, #TOK_KW_DEFAULT
+    b.eq _psw_parse_default
+    b _psw_cases_done
+
+_psw_parse_case:
+    bl _tok_advance              // skip "case"
+    // allocate next_label for this case's skip
+    bl _new_label
+    mov w21, w0                  // w21 = next_case_label
+
+    // load switch value
+    mov w0, w19
+    bl _emit_load_var
+
+    // emit: push x0
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+
+    // parse case value expression
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _psw_err
+
+    // expect ":"
+    mov w0, #TOK_COLON
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _psw_err
+    bl _skip_nl
+
+    // emit: pop x1; cmp x1, x0; b.ne _Lnext_case
+    adrp x0, _fg_pop1@PAGE
+    add x0, x0, _fg_pop1@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_cmp1@PAGE
+    add x0, x0, _fg_cmp1@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_bne@PAGE
+    add x0, x0, _fg_bne@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_lbl@PAGE
+    add x0, x0, _fg_lbl@PAGEOFF
+    bl _emit_str
+    mov w0, w21
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+
+    // parse case body (indented block)
+    bl _tok_peek
+    cmp w0, #TOK_INDENT
+    b.ne _psw_case_body_inline
+    bl _tok_advance
+_psw_case_body:
+    bl _tok_peek
+    cmp w0, #TOK_DEDENT
+    b.eq _psw_case_body_end
+    cmp w0, #TOK_EOF
+    b.eq _psw_case_body_end
+    bl _parse_statement
+    cmp x0, #0
+    b.lt _psw_err
+    b _psw_case_body
+_psw_case_body_end:
+    bl _tok_peek
+    cmp w0, #TOK_DEDENT
+    b.ne 1f
+    bl _tok_advance
+1:
+    // emit: b _Lend_label
+    adrp x0, _fg_b@PAGE
+    add x0, x0, _fg_b@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_lbl@PAGE
+    add x0, x0, _fg_lbl@PAGEOFF
+    bl _emit_str
+    mov w0, w20
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+
+    // emit: next_case_label:
+    mov w0, w21
+    bl _emit_label
+    b _psw_case_loop
+
+_psw_case_body_inline:
+    // single statement case (no indent)
+    bl _parse_statement
+    cmp x0, #0
+    b.lt _psw_err
+    // emit: b _Lend_label
+    adrp x0, _fg_b@PAGE
+    add x0, x0, _fg_b@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_lbl@PAGE
+    add x0, x0, _fg_lbl@PAGEOFF
+    bl _emit_str
+    mov w0, w20
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
+    // emit: next_case_label:
+    mov w0, w21
+    bl _emit_label
+    b _psw_case_loop
+
+_psw_parse_default:
+    bl _tok_advance              // skip "default"
+    mov w0, #TOK_COLON
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _psw_err
+    bl _skip_nl
+
+    // parse default body
+    bl _tok_peek
+    cmp w0, #TOK_INDENT
+    b.ne _psw_default_inline
+    bl _tok_advance
+_psw_default_body:
+    bl _tok_peek
+    cmp w0, #TOK_DEDENT
+    b.eq _psw_default_end
+    cmp w0, #TOK_EOF
+    b.eq _psw_default_end
+    bl _parse_statement
+    cmp x0, #0
+    b.lt _psw_err
+    b _psw_default_body
+_psw_default_end:
+    bl _tok_peek
+    cmp w0, #TOK_DEDENT
+    b.ne _psw_cases_done
+    bl _tok_advance
+    b _psw_cases_done
+
+_psw_default_inline:
+    bl _parse_statement
+    cmp x0, #0
+    b.lt _psw_err
+
+_psw_cases_done:
+    // skip outer DEDENT
+    bl _tok_peek
+    cmp w0, #TOK_DEDENT
+    b.ne 1f
+    bl _tok_advance
+1:
+    // emit: end_label:
+    mov w0, w20
+    bl _emit_label
+    bl _skip_nl
+
+    mov x0, #0
+    b _psw_ret
+_psw_err:
+    mov x0, #-1
+_psw_ret:
+    ldp x21, x22, [sp], #16
     ldp x19, x20, [sp], #16
     ldp x29, x30, [sp], #16
     ret

@@ -36,6 +36,7 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_import
 .globl _kw_extern, _kw_link
 .globl _kw_struct
+.globl _kw_switch, _kw_case, _kw_default
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -73,6 +74,9 @@ _kw_import:    .asciz "import"
 _kw_extern:    .asciz "extern"
 _kw_link:      .asciz "link"
 _kw_struct:    .asciz "struct"
+_kw_switch:    .asciz "switch"
+_kw_case:      .asciz "case"
+_kw_default:   .asciz "default"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -101,6 +105,9 @@ _lnk_lbrew:    .asciz "-L/opt/homebrew/lib"
 .globl _fg_ldr, _fg_ldr1, _fg_str_x0, _fg_cb, _fg_mov, _fg_movn
 .globl _fg_push, _fg_pop0, _fg_pop1, _fg_add, _fg_sub, _fg_mul, _fg_sdiv, _fg_mod
 .globl _fg_add_r, _fg_sub_r, _fg_mul_r, _fg_sdiv_r, _fg_mod_r
+.globl _fg_and, _fg_orr, _fg_eor, _fg_mvn, _fg_lsl_op, _fg_lsr_op
+.globl _fg_and_r, _fg_orr_r, _fg_eor_r, _fg_lsl_op_r, _fg_lsr_op_r
+.globl _fg_mov_x1_x0, _fg_str_x1
 .globl _fg_cmp0, _fg_cmp1, _fg_cmp01
 .globl _fg_ble, _fg_bge, _fg_blt, _fg_bgt, _fg_bne, _fg_beq
 .globl _fg_b, _fg_lbl, _fg_colon
@@ -160,6 +167,20 @@ _fg_mul_r:     .asciz "    mul x0, x0, x1\n"
 _fg_sdiv_r:    .asciz "    sdiv x0, x0, x1\n"
 _fg_mod_r:     .ascii "    sdiv x2, x0, x1\n    msub x0, x2, x1, x0\n"
                .byte 0
+// v1.1: Bitwise codegen fragments
+_fg_and:       .asciz "    and x0, x1, x0\n"
+_fg_orr:       .asciz "    orr x0, x1, x0\n"
+_fg_eor:       .asciz "    eor x0, x1, x0\n"
+_fg_mvn:       .asciz "    mvn x0, x0\n"
+_fg_lsl_op:    .asciz "    lsl x0, x1, x0\n"
+_fg_lsr_op:    .asciz "    lsr x0, x1, x0\n"
+_fg_and_r:     .asciz "    and x0, x0, x1\n"
+_fg_orr_r:     .asciz "    orr x0, x0, x1\n"
+_fg_eor_r:     .asciz "    eor x0, x0, x1\n"
+_fg_lsl_op_r:  .asciz "    lsl x0, x0, x1\n"
+_fg_lsr_op_r:  .asciz "    lsr x0, x0, x1\n"
+// v1.1: Multi-return value support
+_fg_mov_x1_x0: .asciz "    mov x1, x0\n"
 _fg_cmp0:      .asciz "    cmp x0, #"
 _fg_cmp1:      .asciz "    cmp x1, x0\n"
 _fg_cmp01:     .asciz "    cmp x0, x1\n"

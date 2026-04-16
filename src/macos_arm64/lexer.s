@@ -430,8 +430,20 @@ _op_lt:
     b.ge _op_lt_single
     ldrb w5, [x19, x4]
     cmp w5, #'='
-    b.ne _op_lt_single
+    b.eq _op_lte
+    cmp w5, #'<'
+    b.eq _op_shl
+    b _op_lt_single
+_op_lte:
     mov w0, #TOK_LTE
+    mov x1, #2
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #2
+    b _lex_loop
+_op_shl:
+    mov w0, #TOK_SHL
     mov x1, #2
     add x2, x19, x20
     mov x3, #0
@@ -455,8 +467,20 @@ _op_gt:
     b.ge _op_gt_single
     ldrb w5, [x19, x4]
     cmp w5, #'='
-    b.ne _op_gt_single
+    b.eq _op_gte
+    cmp w5, #'>'
+    b.eq _op_shr
+    b _op_gt_single
+_op_gte:
     mov w0, #TOK_GTE
+    mov x1, #2
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #2
+    b _lex_loop
+_op_shr:
+    mov w0, #TOK_SHR
     mov x1, #2
     add x2, x19, x20
     mov x3, #0
@@ -474,7 +498,7 @@ _op_gt_single:
 
 _op_dot:
     cmp w0, #'.'
-    b.ne _lex_err
+    b.ne _op_amp
     add x4, x20, #1
     cmp x4, x21
     b.ge _op_single_dot
@@ -492,6 +516,48 @@ _op_dot:
 _op_single_dot:
     // "." → TOK_DOT
     mov w0, #TOK_DOT
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+
+// v1.1: Bitwise operators
+_op_amp:
+    cmp w0, #'&'
+    b.ne _op_pipe_op
+    mov w0, #TOK_AMP
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+_op_pipe_op:
+    cmp w0, #'|'
+    b.ne _op_caret
+    mov w0, #TOK_PIPE_OP
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+_op_caret:
+    cmp w0, #'^'
+    b.ne _op_tilde
+    mov w0, #TOK_CARET
+    mov x1, #1
+    add x2, x19, x20
+    mov x3, #0
+    bl _lex_add_tok
+    add x20, x20, #1
+    b _lex_loop
+_op_tilde:
+    cmp w0, #'~'
+    b.ne _lex_err
+    mov w0, #TOK_TILDE
     mov x1, #1
     add x2, x19, x20
     mov x3, #0
@@ -1076,13 +1142,46 @@ _mk_try_link:
 _mk_try_struct:
     // "struct" (6)
     cmp x20, #6
-    b.ne _mk_ident
+    b.ne _mk_try_switch
     mov x0, x19
     adrp x1, _kw_struct@PAGE
     add x1, x1, _kw_struct@PAGEOFF
     mov x2, #6
     bl _strncmp
     cbz x0, _mk_struct
+
+_mk_try_switch:
+    // "switch" (6)
+    cmp x20, #6
+    b.ne _mk_try_case
+    mov x0, x19
+    adrp x1, _kw_switch@PAGE
+    add x1, x1, _kw_switch@PAGEOFF
+    mov x2, #6
+    bl _strncmp
+    cbz x0, _mk_switch
+
+_mk_try_case:
+    // "case" (4)
+    cmp x20, #4
+    b.ne _mk_try_default
+    mov x0, x19
+    adrp x1, _kw_case@PAGE
+    add x1, x1, _kw_case@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_case
+
+_mk_try_default:
+    // "default" (7)
+    cmp x20, #7
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_default@PAGE
+    add x1, x1, _kw_default@PAGEOFF
+    mov x2, #7
+    bl _strncmp
+    cbz x0, _mk_default
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -1197,6 +1296,15 @@ _mk_link:
     b _mk_ret
 _mk_struct:
     mov w0, #TOK_KW_STRUCT
+    b _mk_ret
+_mk_switch:
+    mov w0, #TOK_KW_SWITCH
+    b _mk_ret
+_mk_case:
+    mov w0, #TOK_KW_CASE
+    b _mk_ret
+_mk_default:
+    mov w0, #TOK_KW_DEFAULT
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16
