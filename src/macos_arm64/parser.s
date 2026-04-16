@@ -5300,7 +5300,22 @@ _link_add:
     b 1b
 2:  strb wzr, [x2, x5]
     b _la_done
+_la_framework:
+    // @framework: copy with '@' prefix (driver.s handles -framework insertion)
+    mov x5, #0
+3:  cmp w5, w20
+    b.ge 4f
+    ldrb w6, [x19, x5]
+    strb w6, [x2, x5]
+    add x5, x5, #1
+    b 3b
+4:  strb wzr, [x2, x5]
+    b _la_done
 _la_lib:
+    // check if starts with '@' — framework link
+    ldrb w4, [x19]
+    cmp w4, #'@'
+    b.eq _la_framework
     // build "-l<name>"
     mov w3, #'-'
     strb w3, [x2]

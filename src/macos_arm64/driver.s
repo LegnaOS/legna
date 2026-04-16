@@ -427,6 +427,17 @@ _rlm_link_loop:
     mov x4, #64
     mul x4, x2, x4
     add x3, x3, x4
+    // check if framework link: starts with '@'
+    ldrb w5, [x3]
+    cmp w5, #'@'
+    b.ne _rlm_link_normal
+    // emit: -framework <name> (skip '@')
+    adrp x0, _lnk_framework@PAGE
+    add x0, x0, _lnk_framework@PAGEOFF
+    str x0, [sp, x19, lsl #3]
+    add x19, x19, #1
+    add x3, x3, #1               // skip '@'
+_rlm_link_normal:
     str x3, [sp, x19, lsl #3]
     add x19, x19, #1
     add w2, w2, #1
