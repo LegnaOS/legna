@@ -124,6 +124,10 @@
 .equ TOK_KW_CASE,    74
 .equ TOK_KW_DEFAULT, 75
 
+// v1.1: memory access builtins
+.equ TOK_KW_PEEK,    76
+.equ TOK_KW_POKE,    77
+
 // Symbol types
 .equ TY_INT,        0
 .equ TY_STR,        1

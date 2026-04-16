@@ -1061,8 +1061,12 @@ _parse_statement:
     bl _parse_recv
     b _ps_ret
 16: cmp w0, #TOK_KW_SWITCH
-    b.ne 7f
+    b.ne 17f
     bl _parse_switch
+    b _ps_ret
+17: cmp w0, #TOK_KW_POKE
+    b.ne 7f
+    bl _parse_poke
     b _ps_ret
 7:  // unexpected token
     bl _tok_line
@@ -3308,7 +3312,7 @@ _pfac_to_str:
 // v0.7: to_num(s) — string to integer
 _pfac_to_num:
     cmp w0, #TOK_KW_TONUM
-    b.ne _pfac_bitnot
+    b.ne _pfac_peek
     adrp x1, _last_is_imm@PAGE
     add x1, x1, _last_is_imm@PAGEOFF
     str wzr, [x1]
@@ -3336,6 +3340,54 @@ _pfac_to_num:
     // emit: bl _rt_atoi
     adrp x0, _pfac_atoi_call@PAGE
     add x0, x0, _pfac_atoi_call@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
+// v1.1: peek(ptr, idx) — read memory at ptr + idx*8
+_pfac_peek:
+    cmp w0, #TOK_KW_PEEK
+    b.ne _pfac_bitnot
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // parse ptr expr → x0, push
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    // expect comma
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    // parse idx expr → x0
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pfac_err
+    // emit: mov x1, x0; pop x0; ldr x0, [x0, x1, lsl #3]
+    adrp x0, _fg_mov_x1_x0@PAGE
+    add x0, x0, _fg_mov_x1_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_pop0@PAGE
+    add x0, x0, _fg_pop0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_peek@PAGE
+    add x0, x0, _fg_peek@PAGEOFF
     bl _emit_str
     mov w0, #TOK_RPAREN
     bl _tok_expect
@@ -3542,6 +3594,10 @@ _pfac_arr_read:
     lsl w20, w20, #3
     sub w19, w19, w20
     add w19, w19, #8
+    // check if array index access or array-as-value (base address)
+    bl _tok_peek
+    cmp w0, #TOK_LBRACKET
+    b.ne _pfac_arr_as_ptr
     // expect [
     mov w0, #TOK_LBRACKET
     bl _tok_expect
@@ -3582,6 +3638,26 @@ _pfac_arr_read:
     add x0, x0, _fg_ldr_x29_x1@PAGEOFF
     bl _emit_str
     // clear optimization flags
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
+_pfac_arr_as_ptr:
+    // array passed as value — emit: sub x0, x29, #arr_base
+    // This gives the callee a pointer to the array on the caller's stack frame
+    adrp x0, _fg_sub_x0_x29@PAGE
+    add x0, x0, _fg_sub_x0_x29@PAGEOFF
+    bl _emit_str
+    mov x0, x19
+    bl _emit_num
+    adrp x0, _fg_nl@PAGE
+    add x0, x0, _fg_nl@PAGEOFF
+    bl _emit_str
     adrp x1, _last_is_var@PAGE
     add x1, x1, _last_is_var@PAGEOFF
     str wzr, [x1]
@@ -5147,6 +5223,60 @@ _la_done:
     add w1, w1, #1
     str w1, [x0]
     ldp x19, x20, [sp], #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// ────────────────────────────────────────
+// poke(ptr, idx, val) — write val to memory at ptr + idx*8
+// ────────────────────────────────────────
+.globl _parse_poke
+_parse_poke:
+    stp x29, x30, [sp, #-16]!
+    bl _tok_advance              // skip "poke"
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke_err
+    // parse ptr → push
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke_err
+    // parse idx → push
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke_err
+    // parse val → x0
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke_err
+    // emit: mov x2, x0; pop x1; pop x0; str x2, [x0, x1, lsl #3]
+    adrp x0, _fg_poke_seq@PAGE
+    add x0, x0, _fg_poke_seq@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke_err
+    bl _skip_nl
+    mov x0, #0
+    ldp x29, x30, [sp], #16
+    ret
+_ppoke_err:
+    mov x0, #-1
     ldp x29, x30, [sp], #16
     ret
 

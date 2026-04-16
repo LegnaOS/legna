@@ -127,6 +127,8 @@ run_test "fnptr" "tests/fnptr.legna" "$(printf '10 15 20 30')"
 run_test "bitwise" "tests/bitwise.legna" "$(printf '1 7 6 -1 16 4 15')"
 run_test "switch" "tests/switch.legna" "$(printf 'two default expr')"
 run_test "multiret" "tests/multiret.legna" "$(printf '3 2 7 42')"
+run_test "stdlib" "tests/stdlib.legna" "$(printf '21 1 3 1 2 1 8')"
+run_test "functional" "tests/functional.legna" "$(printf '10 2 1 0 2 4 6 8')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"

@@ -1,0 +1,35 @@
+fn insertion_sort(arr, n):
+    let i = 1
+    while i < n:
+        let key = peek(arr, i)
+        let j = i - 1
+        while j >= 0:
+            if peek(arr, j) <= key:
+                break
+            poke(arr, j + 1, peek(arr, j))
+            j = j - 1
+        poke(arr, j + 1, key)
+        i = i + 1
+    return 0
+
+fn selection_sort(arr, n):
+    for i in 0..n - 1:
+        let mi = i
+        let j = i + 1
+        while j < n:
+            if peek(arr, j) < peek(arr, mi):
+                mi = j
+            j = j + 1
+        if mi != i:
+            let tmp = peek(arr, i)
+            poke(arr, i, peek(arr, mi))
+            poke(arr, mi, tmp)
+    return 0
+
+fn is_sorted(arr, n):
+    let i = 1
+    while i < n:
+        if peek(arr, i) < peek(arr, i - 1):
+            return 0
+        i = i + 1
+    return 1

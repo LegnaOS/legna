@@ -1,0 +1,25 @@
+import "array_util"
+import "sort"
+import "search"
+
+legna:
+    let arr = array(5)
+    arr[0] = 5
+    arr[1] = 3
+    arr[2] = 8
+    arr[3] = 1
+    arr[4] = 4
+    output arr_sum(arr, 5)
+    output " "
+    output arr_contains(arr, 5, 8)
+    output " "
+    output arr_find(arr, 5, 1)
+    output " "
+    insertion_sort(arr, 5)
+    output is_sorted(arr, 5)
+    output " "
+    output binary_search(arr, 5, 4)
+    output " "
+    output arr_min(arr, 5)
+    output " "
+    output arr_max(arr, 5)

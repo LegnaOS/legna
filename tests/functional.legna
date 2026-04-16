@@ -1,0 +1,33 @@
+import "functional"
+
+fn double(x):
+    return x * 2
+
+fn add(a, b):
+    return a + b
+
+fn is_even(x):
+    return 1 - (x % 2)
+
+legna:
+    let arr = array(4)
+    arr[0] = 1
+    arr[1] = 2
+    arr[2] = 3
+    arr[3] = 4
+    output reduce(arr, 4, add, 0)
+    output " "
+    output count_if(arr, 4, is_even)
+    output " "
+    output any(arr, 4, is_even)
+    output " "
+    output all(arr, 4, is_even)
+    output " "
+    map(arr, 4, double)
+    output arr[0]
+    output " "
+    output arr[1]
+    output " "
+    output arr[2]
+    output " "
+    output arr[3]

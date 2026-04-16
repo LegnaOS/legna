@@ -1,0 +1,34 @@
+fn map(arr, n, f):
+    for i in 0..n:
+        poke(arr, i, f(peek(arr, i)))
+    return 0
+
+fn for_each(arr, n, f):
+    for i in 0..n:
+        f(peek(arr, i))
+    return 0
+
+fn any(arr, n, pred):
+    for i in 0..n:
+        if pred(peek(arr, i)) != 0:
+            return 1
+    return 0
+
+fn all(arr, n, pred):
+    for i in 0..n:
+        if pred(peek(arr, i)) == 0:
+            return 0
+    return 1
+
+fn count_if(arr, n, pred):
+    let c = 0
+    for i in 0..n:
+        if pred(peek(arr, i)) != 0:
+            c = c + 1
+    return c
+
+fn reduce(arr, n, f, init):
+    let acc = init
+    for i in 0..n:
+        acc = f(acc, peek(arr, i))
+    return acc

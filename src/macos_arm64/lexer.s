@@ -1175,13 +1175,35 @@ _mk_try_case:
 _mk_try_default:
     // "default" (7)
     cmp x20, #7
-    b.ne _mk_ident
+    b.ne _mk_try_peek
     mov x0, x19
     adrp x1, _kw_default@PAGE
     add x1, x1, _kw_default@PAGEOFF
     mov x2, #7
     bl _strncmp
     cbz x0, _mk_default
+
+_mk_try_peek:
+    // "peek" (4)
+    cmp x20, #4
+    b.ne _mk_try_poke
+    mov x0, x19
+    adrp x1, _kw_peek@PAGE
+    add x1, x1, _kw_peek@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_peek
+
+_mk_try_poke:
+    // "poke" (4)
+    cmp x20, #4
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_poke@PAGE
+    add x1, x1, _kw_poke@PAGEOFF
+    mov x2, #4
+    bl _strncmp
+    cbz x0, _mk_poke
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -1305,6 +1327,12 @@ _mk_case:
     b _mk_ret
 _mk_default:
     mov w0, #TOK_KW_DEFAULT
+    b _mk_ret
+_mk_peek:
+    mov w0, #TOK_KW_PEEK
+    b _mk_ret
+_mk_poke:
+    mov w0, #TOK_KW_POKE
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

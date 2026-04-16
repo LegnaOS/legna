@@ -37,6 +37,7 @@ _msg_ok:       .asciz "compiled successfully\n"
 .globl _kw_extern, _kw_link
 .globl _kw_struct
 .globl _kw_switch, _kw_case, _kw_default
+.globl _kw_peek, _kw_poke
 _kw_legna:     .asciz "legna"
 _kw_output:    .asciz "output"
 _kw_let:       .asciz "let"
@@ -77,6 +78,8 @@ _kw_struct:    .asciz "struct"
 _kw_switch:    .asciz "switch"
 _kw_case:      .asciz "case"
 _kw_default:   .asciz "default"
+_kw_peek:      .asciz "peek"
+_kw_poke:      .asciz "poke"
 
 .globl _path_as, _path_ld, _tmp_prefix, _tmp_ext_s, _tmp_ext_o
 .globl _lnk_o, _lnk_lsys, _lnk_syslib, _lnk_sdk
@@ -107,7 +110,8 @@ _lnk_lbrew:    .asciz "-L/opt/homebrew/lib"
 .globl _fg_add_r, _fg_sub_r, _fg_mul_r, _fg_sdiv_r, _fg_mod_r
 .globl _fg_and, _fg_orr, _fg_eor, _fg_mvn, _fg_lsl_op, _fg_lsr_op
 .globl _fg_and_r, _fg_orr_r, _fg_eor_r, _fg_lsl_op_r, _fg_lsr_op_r
-.globl _fg_mov_x1_x0, _fg_str_x1
+.globl _fg_mov_x1_x0, _fg_str_x1, _fg_sub_x0_x29
+.globl _fg_peek, _fg_poke, _fg_poke_seq
 .globl _fg_cmp0, _fg_cmp1, _fg_cmp01
 .globl _fg_ble, _fg_bge, _fg_blt, _fg_bgt, _fg_bne, _fg_beq
 .globl _fg_b, _fg_lbl, _fg_colon
@@ -181,6 +185,15 @@ _fg_lsl_op_r:  .asciz "    lsl x0, x0, x1\n"
 _fg_lsr_op_r:  .asciz "    lsr x0, x0, x1\n"
 // v1.1: Multi-return value support
 _fg_mov_x1_x0: .asciz "    mov x1, x0\n"
+_fg_sub_x0_x29: .asciz "    sub x0, x29, #"
+// peek(ptr, idx) → neg x1; ldr x0, [x0, x1, lsl #3]
+_fg_peek:      .ascii "    neg x1, x1\n    ldr x0, [x0, x1, lsl #3]\n"
+               .byte 0
+// poke(ptr, idx, val) → neg x1; str x2, [x0, x1, lsl #3]
+_fg_poke:      .ascii "    neg x1, x1\n    str x2, [x0, x1, lsl #3]\n"
+               .byte 0
+_fg_poke_seq:  .ascii "    mov x2, x0\n    ldr x1, [sp], #16\n    ldr x0, [sp], #16\n    neg x1, x1\n    str x2, [x0, x1, lsl #3]\n"
+               .byte 0
 _fg_cmp0:      .asciz "    cmp x0, #"
 _fg_cmp1:      .asciz "    cmp x1, x0\n"
 _fg_cmp01:     .asciz "    cmp x0, x1\n"
