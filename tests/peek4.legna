@@ -1,0 +1,20 @@
+extern fn malloc(size)
+extern fn free(ptr)
+
+legna:
+    let buf = malloc(32)
+    poke4(buf, 0, 42)
+    poke4(buf, 4, 99)
+    poke4(buf, 8, 256)
+    output peek4(buf, 0)
+    output " "
+    output peek4(buf, 4)
+    output " "
+    output peek4(buf, 8)
+    output " "
+    poke1(buf, 16, 65)
+    poke1(buf, 17, 66)
+    output peek1(buf, 16)
+    output " "
+    output peek1(buf, 17)
+    free(buf)

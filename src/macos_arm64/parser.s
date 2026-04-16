@@ -1065,8 +1065,16 @@ _parse_statement:
     bl _parse_switch
     b _ps_ret
 17: cmp w0, #TOK_KW_POKE
-    b.ne 7f
+    b.ne 18f
     bl _parse_poke
+    b _ps_ret
+18: cmp w0, #TOK_KW_POKE4
+    b.ne 19f
+    bl _parse_poke4
+    b _ps_ret
+19: cmp w0, #TOK_KW_POKE1
+    b.ne 7f
+    bl _parse_poke1
     b _ps_ret
 7:  // unexpected token
     bl _tok_line
@@ -3354,7 +3362,7 @@ _pfac_to_num:
 // v1.1: peek(ptr, idx) — read memory at ptr + idx*8
 _pfac_peek:
     cmp w0, #TOK_KW_PEEK
-    b.ne _pfac_bitnot
+    b.ne _pfac_peek4
     adrp x1, _last_is_imm@PAGE
     add x1, x1, _last_is_imm@PAGEOFF
     str wzr, [x1]
@@ -3388,6 +3396,94 @@ _pfac_peek:
     bl _emit_str
     adrp x0, _fg_peek@PAGE
     add x0, x0, _fg_peek@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
+// peek4(ptr, byte_offset) — 32-bit read
+_pfac_peek4:
+    cmp w0, #TOK_KW_PEEK4
+    b.ne _pfac_peek1
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_mov_x1_x0@PAGE
+    add x0, x0, _fg_mov_x1_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_pop0@PAGE
+    add x0, x0, _fg_pop0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_peek4@PAGE
+    add x0, x0, _fg_peek4@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x1, _last_is_var@PAGE
+    add x1, x1, _last_is_var@PAGEOFF
+    str wzr, [x1]
+    mov x0, #0
+    b _pfac_ret
+
+// peek1(ptr, byte_offset) — 8-bit read
+_pfac_peek1:
+    cmp w0, #TOK_KW_PEEK1
+    b.ne _pfac_bitnot
+    adrp x1, _last_is_imm@PAGE
+    add x1, x1, _last_is_imm@PAGEOFF
+    str wzr, [x1]
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _pfac_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _pfac_err
+    adrp x0, _fg_mov_x1_x0@PAGE
+    add x0, x0, _fg_mov_x1_x0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_pop0@PAGE
+    add x0, x0, _fg_pop0@PAGEOFF
+    bl _emit_str
+    adrp x0, _fg_peek1@PAGE
+    add x0, x0, _fg_peek1@PAGEOFF
     bl _emit_str
     mov w0, #TOK_RPAREN
     bl _tok_expect
@@ -5276,6 +5372,102 @@ _parse_poke:
     ldp x29, x30, [sp], #16
     ret
 _ppoke_err:
+    mov x0, #-1
+    ldp x29, x30, [sp], #16
+    ret
+
+// poke4(ptr, byte_offset, val) — 32-bit write
+.globl _parse_poke4
+_parse_poke4:
+    stp x29, x30, [sp, #-16]!
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke4_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke4_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke4_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke4_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke4_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke4_err
+    adrp x0, _fg_poke4_seq@PAGE
+    add x0, x0, _fg_poke4_seq@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke4_err
+    bl _skip_nl
+    mov x0, #0
+    ldp x29, x30, [sp], #16
+    ret
+_ppoke4_err:
+    mov x0, #-1
+    ldp x29, x30, [sp], #16
+    ret
+
+// poke1(ptr, byte_offset, val) — 8-bit write
+.globl _parse_poke1
+_parse_poke1:
+    stp x29, x30, [sp, #-16]!
+    bl _tok_advance
+    mov w0, #TOK_LPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke1_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke1_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke1_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke1_err
+    adrp x0, _fg_push@PAGE
+    add x0, x0, _fg_push@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_COMMA
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke1_err
+    bl _parse_bitor
+    cmp x0, #0
+    b.lt _ppoke1_err
+    adrp x0, _fg_poke1_seq@PAGE
+    add x0, x0, _fg_poke1_seq@PAGEOFF
+    bl _emit_str
+    mov w0, #TOK_RPAREN
+    bl _tok_expect
+    cmp x0, #0
+    b.lt _ppoke1_err
+    bl _skip_nl
+    mov x0, #0
+    ldp x29, x30, [sp], #16
+    ret
+_ppoke1_err:
     mov x0, #-1
     ldp x29, x30, [sp], #16
     ret

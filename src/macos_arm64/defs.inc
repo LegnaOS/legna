@@ -127,6 +127,10 @@
 // v1.1: memory access builtins
 .equ TOK_KW_PEEK,    76
 .equ TOK_KW_POKE,    77
+.equ TOK_KW_PEEK4,   78    // 32-bit read
+.equ TOK_KW_POKE4,   79    // 32-bit write
+.equ TOK_KW_PEEK1,   80    // 8-bit read
+.equ TOK_KW_POKE1,   81    // 8-bit write
 
 // Symbol types
 .equ TY_INT,        0

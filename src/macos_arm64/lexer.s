@@ -1195,15 +1195,49 @@ _mk_try_peek:
     cbz x0, _mk_peek
 
 _mk_try_poke:
-    // "poke" (4)
+    // "poke" (4) or "poke4" (5) or "poke1" (5)
     cmp x20, #4
-    b.ne _mk_ident
+    b.eq _mk_try_poke_exact
+    cmp x20, #5
+    b.ne _mk_try_peek4
+    // check "poke4" or "poke1"
+    mov x0, x19
+    adrp x1, _kw_poke4@PAGE
+    add x1, x1, _kw_poke4@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_poke4
+    mov x0, x19
+    adrp x1, _kw_poke1@PAGE
+    add x1, x1, _kw_poke1@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_poke1
+    b _mk_try_peek4
+_mk_try_poke_exact:
     mov x0, x19
     adrp x1, _kw_poke@PAGE
     add x1, x1, _kw_poke@PAGEOFF
     mov x2, #4
     bl _strncmp
     cbz x0, _mk_poke
+
+_mk_try_peek4:
+    // "peek4" (5) or "peek1" (5)
+    cmp x20, #5
+    b.ne _mk_ident
+    mov x0, x19
+    adrp x1, _kw_peek4@PAGE
+    add x1, x1, _kw_peek4@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_peek4
+    mov x0, x19
+    adrp x1, _kw_peek1@PAGE
+    add x1, x1, _kw_peek1@PAGEOFF
+    mov x2, #5
+    bl _strncmp
+    cbz x0, _mk_peek1
 
 _mk_ident:
     mov w0, #TOK_IDENT
@@ -1333,6 +1367,18 @@ _mk_peek:
     b _mk_ret
 _mk_poke:
     mov w0, #TOK_KW_POKE
+    b _mk_ret
+_mk_peek4:
+    mov w0, #TOK_KW_PEEK4
+    b _mk_ret
+_mk_poke4:
+    mov w0, #TOK_KW_POKE4
+    b _mk_ret
+_mk_peek1:
+    mov w0, #TOK_KW_PEEK1
+    b _mk_ret
+_mk_poke1:
+    mov w0, #TOK_KW_POKE1
     b _mk_ret
 _mk_ret:
     ldp x19, x20, [sp], #16

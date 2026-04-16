@@ -129,6 +129,7 @@ run_test "switch" "tests/switch.legna" "$(printf 'two default expr')"
 run_test "multiret" "tests/multiret.legna" "$(printf '3 2 7 42')"
 run_test "stdlib" "tests/stdlib.legna" "$(printf '21 1 3 1 2 1 8')"
 run_test "functional" "tests/functional.legna" "$(printf '10 2 1 0 2 4 6 8')"
+run_test "peek4" "tests/peek4.legna" "$(printf '42 99 256 65 66')"
 
 echo ""
 echo "Results: $PASS/$TOTAL passed, $FAIL failed"
